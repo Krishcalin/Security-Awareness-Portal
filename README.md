@@ -97,7 +97,7 @@ never reach the thing that runs.
 
 ```bash
 python -m pytest                # 213, needs the database from docker compose
-cd frontend && npm test         # 92
+cd frontend && npm test         # 97
 ```
 
 ---
@@ -184,11 +184,17 @@ middle of "that works". A track that is approximately right is worse than none,
 because the highlight creeps ahead of the voice until the learner distrusts the
 reading rather than the highlight.
 
+**The transcript is off by default.** The course is meant to be listened to,
+and a wall of text beside the voice invites people to read ahead instead of
+hearing it. It is one control away, the choice is remembered across slides, and
+it is **forced on when there is nothing to hear** — no recording and no voices
+on the machine. A compliance course that somebody who is deaf cannot take is a
+worse problem than a cluttered screen, so the words are hidden, never removed.
+
 **Falling back, never falling silent.** A slide with no current recording is
-read by the browser. So is one whose file fails to load. The transcript is on
-screen throughout either way, which is also what makes the course usable
-without hearing it at all — and on a machine with no voices installed *and* no
-recording, the player says so rather than being silently silent.
+read by the browser. So is one whose file fails to load. On a machine with no
+voices installed *and* no recording, the player says so and shows the words
+rather than being silently silent.
 
 Browser speech synthesis, still the fallback, has four failure modes that look
 like nothing at all, and all four are handled in

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router"
 import {
-  ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX,
+  ChevronLeft, ChevronRight, Captions, Pause, Play, Volume2, VolumeX,
 } from "lucide-react"
 
 import { api } from "../api/client"
@@ -26,6 +26,31 @@ function spokenIndex(marks: Mark[], ms: number): number {
     else high = middle - 1
   }
   return found
+}
+
+/**
+ * Whether to show the words on screen.
+ *
+ * OFF by default: the course is meant to be listened to, and a wall of text
+ * beside the voice invites people to read ahead instead of hearing it.
+ *
+ * Not removed, though. The transcript is the only way somebody who is deaf or
+ * hard of hearing can take this course, and a compliance course that part of
+ * the workforce cannot take is a worse problem than a cluttered screen. It is
+ * also what a machine with no voices and no recording falls back to. So it is
+ * one control away, the choice is remembered, and it is forced on when there
+ * is genuinely nothing to hear.
+ */
+const TRANSCRIPT_PREFERENCE = "show-transcript"
+
+function wantsTranscript(): boolean {
+  try {
+    return localStorage.getItem(TRANSCRIPT_PREFERENCE) === "yes"
+  } catch {
+    // Storage blocked. Default to the quiet screen; the control still works
+    // for this visit.
+    return false
+  }
 }
 
 /** Words with their offsets, for following the narration as it is spoken. */
@@ -76,6 +101,7 @@ export function Player() {
   const [muted, setMuted] = useState(false)
   const [autoAdvance, setAutoAdvance] = useState(true)
   const [reachedEnd, setReachedEnd] = useState(false)
+  const [showTranscript, setShowTranscript] = useState(wantsTranscript)
 
   const narrator = useRef(new Narrator())
   const audio = useRef<HTMLAudioElement | null>(null)
@@ -142,6 +168,14 @@ export function Player() {
   }, [])
 
   useEffect(() => stopFollowing, [stopFollowing])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TRANSCRIPT_PREFERENCE, showTranscript ? "yes" : "no")
+    } catch {
+      // Nothing to do; the choice simply lasts for this visit.
+    }
+  }, [showTranscript])
 
   useEffect(() => {
     if (lesson) void api.recordProgress(slug, lesson.ordinal).catch(() => {
@@ -245,6 +279,9 @@ export function Player() {
     return <p className="mx-auto max-w-4xl px-5 py-10 text-muted">Loading…</p>
   }
 
+  // No recording and no voice on this machine: the words are the only way
+  // this slide says anything, so they are not optional here.
+  const nothingToHear = status === "unsupported" && !lesson.audio_url
   const atEnd = index === lastIndex
   const progress = ((index + 1) / detail.lessons.length) * 100
 
@@ -347,6 +384,17 @@ export function Player() {
           {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
         </button>
 
+        <button
+          type="button"
+          onClick={() => setShowTranscript(!showTranscript)}
+          className="rounded-lg border border-line px-3 py-2 text-muted"
+          aria-label={showTranscript ? "Hide the transcript"
+                                     : "Show the transcript"}
+          aria-pressed={showTranscript}
+        >
+          <Captions size={18} />
+        </button>
+
         <label className="ml-auto flex items-center gap-2 text-sm text-muted">
           <input
             type="checkbox"
@@ -359,7 +407,7 @@ export function Player() {
 
       <section className="mt-6 rounded-xl border border-line bg-surface p-5">
         <h2 className="text-xl font-semibold tracking-tight">{lesson.title}</h2>
-        {status === "unsupported" && !lesson.audio_url && (
+        {nothingToHear && (
           // Said out loud rather than left as silence. A learner on a machine
           // with no voices should know the narration is missing, not conclude
           // that this slide has none.
@@ -370,13 +418,30 @@ export function Player() {
         )}
         {lesson.narration ? (
           <div className="mt-3">
-            <Transcript narration={lesson.narration} spokenAt={spokenAt} />
-            <p className="mt-3 text-sm text-muted tabular-nums">
+            {/* Shown when asked for, and forced on when there is nothing to
+                hear — a slide that is both silent and blank teaches nobody. */}
+            {(showTranscript || nothingToHear) && (
+              <Transcript narration={lesson.narration} spokenAt={spokenAt} />
+            )}
+            <p className={`text-sm text-muted tabular-nums ${
+              showTranscript || nothingToHear ? "mt-3" : ""}`}>
               About {Math.round(lesson.narration_seconds / 5) * 5} seconds
               {lesson.audio_url
                 ? " · recorded narration"
                 : narrator.current.voiceName && status !== "unsupported"
                   ? ` · read by ${narrator.current.voiceName}` : ""}
+              {!showTranscript && !nothingToHear && (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={() => setShowTranscript(true)}
+                    className="underline underline-offset-4 hover:text-text"
+                  >
+                    Show the words
+                  </button>
+                </>
+              )}
             </p>
           </div>
         ) : (
