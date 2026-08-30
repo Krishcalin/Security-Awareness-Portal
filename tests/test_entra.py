@@ -440,16 +440,19 @@ def test_an_error_from_microsoft_cannot_inject_script(clean, microsoft):
     assert "&lt;script&gt;" in page.text
 
 
-def test_the_sign_in_page_quotes_the_real_length_of_the_course(clean, microsoft):
-    """The figure moved from nineteen minutes to twenty-one the moment the
-    narration gained a pause after every full stop. A promise nobody
-    re-checked is the kind of small lie a portal accumulates."""
-    import json
-    from server import content
+def test_the_sign_in_page_says_nothing_about_the_course(clean, microsoft):
+    """It used to quote the length of the training, which had to be read from
+    the content so the figure could not go stale. The page now says `Login`
+    and nothing else, so it makes no claim that could — and it no longer
+    touches the content at all to render."""
     microsoft()
     page = clean.get("/auth/login", follow_redirects=False).text
-    minutes = sum(m["minutes"] for m in content.load_modules())
-    assert "About %d minutes" % minutes in page
+    assert ">Login<" in page
+    # The two sentences that used to sit here, named rather than asserted
+    # away with a bare "minutes" — the word appears legitimately further
+    # down, in the line about what this course spends twenty minutes on.
+    assert "minutes, narrated" not in page
+    assert "brings you back to the slide you left" not in page
 
 
 def test_the_sign_in_page_renders_even_if_the_content_will_not_load(
@@ -461,4 +464,4 @@ def test_the_sign_in_page_renders_even_if_the_content_will_not_load(
     page = clean.get("/auth/login", follow_redirects=False)
     assert page.status_code == 200
     assert "Sign in with Microsoft" in page.text
-    assert "About 0 minutes" not in page.text
+    assert 'name="password"' in page.text

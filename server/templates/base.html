@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap">
 <style>
 /*
  * The signed-out pages: sign in, and choose a password.
@@ -93,6 +93,20 @@ body {
 
 h1 { font-size: 25px; line-height: 1.25; letter-spacing: -.015em;
      font-weight: 700; margin: 0 0 6px; }
+
+/* The word above the fields, and the only thing above them.
+ *
+ * Its own class rather than a bigger `h1`, because the change-password page
+ * shares that heading and "Choose your password" at this size wraps to three
+ * lines in a 380px column.
+ *
+ * `--text`, not `#000`: it is #171a1f here, which reads as black, and it is
+ * near-white in the dark theme. A hard black would be a black word on a black
+ * panel for anybody whose machine is set that way. */
+.login-title {
+  font-size: 34px; line-height: 1.15; letter-spacing: -.02em;
+  font-weight: 800; color: var(--text); margin: 0 0 26px;
+}
 .lede { color: var(--muted); margin: 0 0 26px; }
 
 /* ── the form ──────────────────────────────────────────────────────────── */

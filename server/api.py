@@ -893,28 +893,11 @@ def _sign_in_page(problem: str = "", status: int = 200,
         TEMPLATES.get_template("index.html").render(
             problem=problem,
             configured=entra.configured(),
-            minutes=_course_minutes(),
             # Put back so a mistyped password does not also mean retyping the
             # address. Autoescaped, like everything else on this page.
             email=email,
             form_token=_form_token("signin"),
             next_query=query)))
-
-
-def _course_minutes() -> int:
-    """How long the course actually runs, for the one screen that promises it.
-
-    Read from the content rather than written into the page: the figure moved
-    from nineteen to twenty-one the moment the narration gained a pause after
-    every full stop, and a promise of twenty minutes that nobody re-checked is
-    the kind of small lie a portal accumulates.
-    """
-    try:
-        return sum(module.get("minutes", 0) for module in content.load_modules())
-    except Exception:                                   # noqa: BLE001
-        # The sign-in page must render even when the content will not load —
-        # it is the screen somebody is looking at when nothing else works.
-        return 0
 
 
 @app.get("/auth/login", include_in_schema=False)

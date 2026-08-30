@@ -11,12 +11,10 @@
   shape people already read as "the other way in".
 #}
 {% block form %}
-      <h1>Security Awareness Training</h1>
-      <p class="lede">
-        {% if minutes %}About {{ minutes }} minutes, narrated,{% else %}
-        Narrated,{% endif %} with a short knowledge check at the end. You can
-        stop whenever you like — it brings you back to the slide you left.
-      </p>
+      {# One word. What the portal IS still comes off the brand panel beside
+         this and out of the <title> — a bare "Login" with no identity on the
+         page at all is the shape of a phishing form. #}
+      <h1 class="login-title">Login</h1>
 
       <form method="post" action="/auth/password{{ next_query }}"
             autocomplete="on">
