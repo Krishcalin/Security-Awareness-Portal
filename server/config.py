@@ -58,6 +58,13 @@ class Settings:
             "SMTP_STARTTLS", "1").lower() not in ("0", "false", "no")
         self.smtp_timeout: int = int(os.environ.get("SMTP_TIMEOUT", "20"))
 
+        # Lets /auth/dev redeem a session token minted from the shell, so
+        # the app can be opened in a browser before Entra is configured.
+        # Off unless asked for, and refused outright once Entra IS
+        # configured — see the route for why it is not a way in.
+        self.allow_dev_signin: bool = os.environ.get(
+            "ALLOW_DEV_SIGNIN", "0").lower() in ("1", "true", "yes")
+
     @property
     def mail_configured(self) -> bool:
         return bool(self.smtp_host and self.certificate_from)

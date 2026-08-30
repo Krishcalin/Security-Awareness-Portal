@@ -592,6 +592,42 @@ def sign_in_callback(request: Request) -> Response:
     return response
 
 
+@app.get("/auth/dev", include_in_schema=False)
+def dev_sign_in(token: str = "", next: str = "/") -> Response:
+    """Redeem a session token minted by `python -m server.devsession --link`.
+
+    THIS IS NOT A WAY IN. It accepts nothing but a token already signed with
+    SESSION_SECRET, and anybody who can produce one of those can set the
+    cookie directly — this only saves them the trouble. It is not the thing
+    this file refuses to have, which is an endpoint that takes an email
+    address and believes it.
+
+    It is still gated twice, because a convenience that survives into
+    production is how a URL in someone's browser history becomes a session:
+    off unless ALLOW_DEV_SIGNIN is set, and refused outright the moment Entra
+    is configured, so it can never sit alongside real sign-in.
+    """
+    if not settings.allow_dev_signin or entra.configured():
+        # 404 rather than 403: a route that says "not enabled" tells a scanner
+        # that it exists and is worth coming back for.
+        raise HTTPException(status_code=404, detail="not found")
+    claims = auth.read(token)
+    if not claims:
+        return _sign_in_problem("That development sign-in link is not valid "
+                                "or has expired. Mint another with "
+                                "`python -m server.devsession --link`.")
+    log.warning("development sign-in redeemed for %s", claims["oid"])
+    response = RedirectResponse(entra.safe_next(next) if next != "/"
+                                else resume_path_for_oid(claims["oid"]),
+                                status_code=303)
+    _set_session(response, claims["oid"])
+    return response
+
+
+def resume_path_for_oid(entra_oid: str) -> str:
+    learner = db.one("SELECT id FROM learner WHERE entra_oid = %s", (entra_oid,))
+    return resume_path(learner["id"]) if learner else "/"
+
 @app.get("/auth/logout", include_in_schema=False)
 def sign_out() -> Response:
     """Sign out here AND at Microsoft.

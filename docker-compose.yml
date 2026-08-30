@@ -1,5 +1,16 @@
-# Development database. A container of its own on a port of its own: sharing an
-# instance with another product means one `docker compose down -v` takes both.
+# The whole portal, locally.
+#
+#   docker compose up -d --build
+#   docker compose exec app python -m server.devsession \
+#       --email you@example.com --first Your --last Name --link
+#
+# Then open the link it prints. The portal is on 8080 and the mail it sends is
+# caught by Mailpit on 8081 rather than going anywhere near a real mailbox.
+#
+# THIS FILE IS FOR DEVELOPMENT AND SAYS SO. The session secret is in plain
+# sight, the cookies are not Secure because this is http, and ALLOW_DEV_SIGNIN
+# is on. None of those belong anywhere but a laptop.
+
 services:
   db:
     image: postgres:16-alpine
@@ -9,6 +20,8 @@ services:
       POSTGRES_PASSWORD: awareness
       POSTGRES_DB: awareness
     ports:
+      # A container of its own on a port of its own: sharing an instance with
+      # another product means one `docker compose down -v` takes both.
       - "5434:5432"
     volumes:
       - awareness-db-data:/var/lib/postgresql/data
@@ -17,6 +30,47 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  mail:
+    # Catches everything and shows it in a browser, so the certificate email
+    # can be looked at rather than taken on trust — and so testing the portal
+    # never posts anything to a real person.
+    image: axllent/mailpit:latest
+    container_name: awareness-mail
+    ports:
+      - "8081:8025"      # the web interface
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+  app:
+    build: .
+    container_name: awareness-app
+    ports:
+      - "8080:8000"
+    environment:
+      DB_DSN: postgresql://awareness:awareness@db:5432/awareness
+      SESSION_SECRET: dev-only-not-a-secret-change-me
+
+      # http on localhost, so a Secure cookie would never be sent back.
+      COOKIE_SECURE: "0"
+      # Lets `devsession --link` produce a URL that signs you in. Refused
+      # outright once ENTRA_* is configured, so it cannot sit beside real
+      # sign-in.
+      ALLOW_DEV_SIGNIN: "1"
+
+      PASS_MARK: "0.70"
+      CERTIFICATE_FROM: ciso@mycompanydomain.com
+      CERTIFICATE_FROM_NAME: Chief Information Security Officer
+      SMTP_HOST: mail
+      SMTP_PORT: "1025"
+      SMTP_STARTTLS: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+      mail:
+        condition: service_started
 
 volumes:
   awareness-db-data:

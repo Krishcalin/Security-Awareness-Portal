@@ -40,15 +40,41 @@ the material that failed rather than at the people who answered.
 
 ## Running it
 
+The whole thing, in Docker:
+
 ```bash
-docker compose up -d                 # Postgres on 5434
+docker compose up -d --build
+
+docker compose exec app python -m server.devsession \
+    --email you@example.com --first Your --last Name --link
+```
+
+Open the link it prints.
+
+| | |
+|---|---|
+| http://localhost:8080 | the portal |
+| http://localhost:8081 | Mailpit — every certificate email is caught here rather than posted to anybody |
+| localhost:5434 | Postgres |
+
+The compose file is **for development and says so**: the session secret is in
+plain sight, cookies are not Secure because this is http, and `ALLOW_DEV_SIGNIN`
+is on. None of those belong anywhere but a laptop.
+
+`devsession` exists because there is no login endpoint. `/auth/dev` redeems a
+token already signed with `SESSION_SECRET` — anybody who can produce one could
+set the cookie directly, so it grants nothing new — and it is gated twice
+anyway: off unless `ALLOW_DEV_SIGNIN=1`, and it 404s the moment `ENTRA_*` is
+configured, so it can never sit beside real sign-in.
+
+### Without Docker
+
+```bash
+docker compose up -d db              # Postgres on 5434
 cp .env.example .env                 # then edit
 pip install -r requirements.txt
 python -m tools.build_content        # slides + script -> data/modules/*.json
-
-# a session, without needing Entra configured
-python -m server.devsession --email you@example.com --name "Your Name"
-
+python -m server.devsession --email you@example.com --first Your --last Name
 uvicorn server.api:app --reload      # http://localhost:8000
 ```
 
@@ -59,11 +85,13 @@ cd frontend && npm install && npm run dev     # http://localhost:5174
 ```
 
 `npm run build` emits into `server/spa/`, which the API serves when present.
+The image builds it in a separate stage, so Node and 200 build-time packages
+never reach the thing that runs.
 
 ### Tests
 
 ```bash
-python -m pytest                # 120, needs the database from docker compose
+python -m pytest                # 126, needs the database from docker compose
 cd frontend && npm test         # 31
 ```
 

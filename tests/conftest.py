@@ -48,7 +48,10 @@ def app_client():
     """A client with the app's lifespan run: schema applied, content loaded."""
     from fastapi.testclient import TestClient
     from server.api import app
-    with TestClient(app) as client:
+    # https, because the session cookie is Secure and a client speaking http
+    # silently DISCARDS it — which reads as "not signed in" in a way that a
+    # leftover cookie from an earlier test can accidentally paper over.
+    with TestClient(app, base_url="https://testserver") as client:
         yield client
 
 
@@ -62,6 +65,11 @@ def clean(app_client):
     from server import db
     db.execute("TRUNCATE response, attempt, enrolment, learner "
                "RESTART IDENTITY CASCADE")
+    # The client is shared for the whole session, so its cookie jar outlives
+    # each test. A cookie the SERVER set in an earlier test is not replaced by
+    # a later `cookies.set` of the same name — httpx keeps both — and the
+    # request then goes out as somebody who no longer exists.
+    app_client.cookies.clear()
     return app_client
 
 

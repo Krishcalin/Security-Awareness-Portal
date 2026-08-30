@@ -316,3 +316,50 @@ def test_a_deep_link_still_beats_the_resume_point(clean, microsoft):
                       auth.sign({"state": "st", "next": "/module/x?slide=3"}))
     back = clean.get("/auth/callback?code=abc&state=st", follow_redirects=False)
     assert back.headers["location"] == "/module/x?slide=3"
+
+
+# ── the development sign-in link ───────────────────────────────────────────
+
+def test_the_dev_link_is_not_there_unless_it_is_asked_for(clean):
+    """A convenience that survives into production is how a URL in somebody's
+    browser history becomes a session."""
+    response = clean.get("/auth/dev?token=" + auth.issue(OID),
+                         follow_redirects=False)
+    assert response.status_code == 404
+
+
+def test_the_dev_link_disappears_once_entra_is_configured(clean, monkeypatch,
+                                                          entra_configured):
+    """It must never sit alongside real sign-in."""
+    monkeypatch.setattr(settings, "allow_dev_signin", True)
+    assert clean.get("/auth/dev?token=" + auth.issue(OID),
+                     follow_redirects=False).status_code == 404
+
+
+@pytest.fixture
+def dev_signin(clean, monkeypatch):
+    monkeypatch.setattr(settings, "allow_dev_signin", True)
+    monkeypatch.setattr(settings, "entra_tenant_id", "")
+    monkeypatch.setattr(settings, "cookie_secure", False)
+    return clean
+
+
+def test_the_dev_link_only_takes_a_token_this_server_signed(dev_signin):
+    """Which is what stops it being a way in: forging one needs the secret,
+    and anybody holding that could set the cookie directly anyway."""
+    signed = auth.issue(OID)
+    body, _, signature = signed.rpartition(".")
+    forged = dev_signin.get("/auth/dev?token=" + body + "." + signature[::-1],
+                            follow_redirects=False)
+    assert forged.status_code == 400
+    assert auth.COOKIE_NAME not in forged.cookies
+
+
+def test_the_dev_link_signs_the_holder_in(dev_signin):
+    auth.upsert_learner(entra_oid=OID, email="dev@example.com")
+    response = dev_signin.get("/auth/dev?token=" + auth.issue(OID),
+                              follow_redirects=False)
+    assert response.status_code == 303
+    claims = auth.read(response.cookies[auth.COOKIE_NAME])
+    assert claims and claims["oid"] == OID
+    assert dev_signin.get("/api/me").json()["email"] == "dev@example.com"

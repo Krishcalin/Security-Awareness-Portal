@@ -81,3 +81,20 @@ def test_the_ciso_address_matches_the_default():
     from server.config import settings
     env = (ROOT / ".env.example").read_text(encoding="utf-8")
     assert "CERTIFICATE_FROM=%s" % settings.certificate_from in env
+
+
+def test_the_ports_in_the_readme_are_the_ports_compose_publishes():
+    """Somebody follows these in order; a wrong port stops them at the first
+    thing they try to open."""
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    published = set(re.findall(r'"(\d+):\d+"', compose))
+    for port in published:
+        assert port in README, "compose publishes %s, README never says so" % port
+
+
+def test_the_dev_signin_gate_named_in_the_readme_is_the_one_in_the_code():
+    from server.config import Settings
+    import inspect
+    source = inspect.getsource(Settings.__init__)
+    assert "ALLOW_DEV_SIGNIN" in source
+    assert "ALLOW_DEV_SIGNIN" in README
