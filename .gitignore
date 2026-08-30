@@ -1,23 +1,33 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
+# This file was the Dynamics 365 Business Central (AL) template chosen when the
+# repository was created. There is no AL code here and never will be, so it
+# ignored nothing and hid nothing — replaced with the stack this project
+# actually uses: Python on the server, React on the client.
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# The built SPA is produced by `npm run build` on deploy, never committed — a
+# checked-in bundle drifts from its source silently.
+server/spa/
+
+# Editors and OS
 .vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-files
-*.bclicense
-*.flf
-#Test results file
-TestResults.xml
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local scratch
+*.local
