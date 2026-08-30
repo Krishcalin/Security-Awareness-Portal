@@ -260,3 +260,38 @@ def test_module_list_separates_reaching_the_end_from_answering(signed_in):
 
 def test_an_unknown_module_is_a_404(signed_in):
     assert signed_in.get("/api/modules/not-a-module").status_code == 404
+
+
+# ── serving the app itself ─────────────────────────────────────────────────
+
+def _spa_built() -> bool:
+    from server.api import SPA
+    return SPA.is_dir()
+
+
+@pytest.mark.skipif(not _spa_built(),
+                    reason="no built SPA here; run `npm run build` in frontend/")
+def test_the_catch_all_is_registered_after_the_api(app_client):
+    """Starlette matches routes in registration order, so a catch-all declared
+    above the API returns the front page for every endpoint — which is exactly
+    what it did the first time it was added."""
+    from server.api import app
+    paths = [route.path for route in app.routes if hasattr(route, "path")]
+    assert paths[-1] == "/{path:path}"
+    assert paths.index("/{path:path}") > paths.index("/api/me")
+
+
+@pytest.mark.skipif(not _spa_built(), reason="no built SPA here")
+def test_a_deep_link_into_a_course_serves_the_app(app_client):
+    """Refreshing on /module/essentials must not 404. That page is a route
+    inside the app, not a file on disk."""
+    response = app_client.get("/module/security-awareness-essentials")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+
+
+@pytest.mark.skipif(not _spa_built(), reason="no built SPA here")
+def test_the_catch_all_does_not_serve_files_outside_the_app(app_client):
+    """`path` comes from the URL."""
+    escape = app_client.get("/../../server/schema.sql")
+    assert "CREATE TABLE" not in escape.text

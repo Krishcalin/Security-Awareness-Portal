@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+/*
+ * Colour is defined once, as raw values, and the Tailwind theme points at
+ * those. Redefining a token per theme (rather than restyling components inside
+ * a media query) is what keeps a colour from having its only definition behind
+ * a `prefers-color-scheme` block — the classic way a page ends up rendering
+ * one theme's text on the other theme's background.
+ */
+:root {
+  --canvas: #f6f7f9;
+  --surface: #ffffff;
+  --surface-sunk: #eef0f4;
+  --line: #dfe3ea;
+  --text: #171a1f;
+  --text-muted: #5c6470;
+  --accent: #12615e;
+  --accent-soft: #d9ecea;
+  --right: #1f6b45;
+  --right-soft: #dcefe3;
+  --wrong: #a03028;
+  --wrong-soft: #f7e0dd;
+  --shadow: 0 1px 2px rgb(16 22 30 / 0.06), 0 8px 24px rgb(16 22 30 / 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0d1014;
+    --surface: #151920;
+    --surface-sunk: #1d222b;
+    --line: #262d38;
+    --text: #e8ebf0;
+    --text-muted: #98a1b0;
+    --accent: #4fb3ac;
+    --accent-soft: #10312f;
+    --right: #5fbd8a;
+    --right-soft: #122c1f;
+    --wrong: #e88a83;
+    --wrong-soft: #33191a;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  --canvas: #0d1014;
+  --surface: #151920;
+  --surface-sunk: #1d222b;
+  --line: #262d38;
+  --text: #e8ebf0;
+  --text-muted: #98a1b0;
+  --accent: #4fb3ac;
+  --accent-soft: #10312f;
+  --right: #5fbd8a;
+  --right-soft: #122c1f;
+  --wrong: #e88a83;
+  --wrong-soft: #33191a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-sunk: var(--surface-sunk);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-right: var(--right);
+  --color-right-soft: var(--right-soft);
+  --color-wrong: var(--wrong);
+  --color-wrong-soft: var(--wrong-soft);
+
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  /* The transcript is long-form reading, not interface text. */
+  --font-read: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A visible focus ring everywhere, including on the option buttons, because
+   the whole check must be answerable from the keyboard. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The word the narrator is currently speaking. */
+.spoken-now {
+  background: var(--accent-soft);
+  border-radius: 3px;
+  box-decoration-break: clone;
+}

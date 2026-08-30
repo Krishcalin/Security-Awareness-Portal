@@ -18,9 +18,12 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from server import auth, content, db, ingest
@@ -46,6 +49,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Security Awareness Portal", lifespan=lifespan)
+
+# The slide artwork, served from where it is authored. Copying 12MB of PNGs
+# into the frontend's public/ would give two copies and one of them would go
+# stale the next time a slide is redrawn.
+#
+# Mounted at /media rather than /assets because Vite emits the built bundle to
+# /assets/, and this mount is matched first: sharing the prefix would have made
+# every production build 404 on its own JavaScript while working perfectly in
+# development, where Vite serves the bundle itself.
+MEDIA = Path(__file__).resolve().parents[1] / "assets"
+if MEDIA.is_dir():
+    app.mount("/media", StaticFiles(directory=MEDIA), name="media")
+
 
 
 # ── requests ───────────────────────────────────────────────────────────────
@@ -328,3 +344,32 @@ def finish(attempt_id: int,
         # on the third go is not the same evidence as a pass on the first.
         "first_attempt": row["attempt_no"] == 1,
     }
+
+
+# ── the app itself ─────────────────────────────────────────
+#
+# Registered after every /api route on purpose. Starlette matches routes in the
+# order they are added, so a catch-all declared any earlier in this file
+# swallows the whole API — which is what happened the first time, and it looks
+# like every endpoint returning the front page.
+SPA = Path(__file__).resolve().parent / "spa"
+if SPA.is_dir():
+    app.mount("/assets", StaticFiles(directory=SPA / "assets"),
+              name="spa-assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str) -> FileResponse:
+        """Serve the app, and let it own its own URLs.
+
+        A plain static mount 404s on /module/essentials, because that is a
+        route inside the app rather than a file on disk. Everything works until
+        somebody refreshes the page or follows a link into the middle of a
+        course, which is the moment a learner is least inclined to work out
+        what went wrong.
+        """
+        candidate = (SPA / path).resolve()
+        # `path` comes from the URL, so ../.. has to be ruled out rather than
+        # assumed away.
+        if path and candidate.is_file() and SPA in candidate.parents:
+            return FileResponse(candidate)
+        return FileResponse(SPA / "index.html")
