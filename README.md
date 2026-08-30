@@ -91,8 +91,8 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 151, needs the database from docker compose
-cd frontend && npm test         # 70
+python -m pytest                # 153, needs the database from docker compose
+cd frontend && npm test         # 74
 ```
 
 ---
@@ -138,7 +138,23 @@ gets read aloud. The only thing that reliably produces silence is silence.
 
 So the text is split on its own punctuation and each piece spoken as its own
 utterance: 350ms after a full stop, 200ms after a colon, 650ms between
-paragraphs. Those pauses are part of how long a slide takes, so the build
+paragraphs.
+
+**Each utterance is led by a comma**, which exists to be thrown away. Chrome on
+Windows clips the opening of an utterance — the audio device is still starting
+when the synthesiser begins — so the first word goes missing. One utterance per
+slide costs the first word of the slide; one per sentence costs the first word
+of every sentence, which is the same complaint in a new place. The comma gives
+the clip something to eat, is not read aloud, and is subtracted back out of the
+word-boundary offsets so the transcript is unaffected.
+
+Clipping is a property of the speech engine, and it cannot be verified by
+reading code. [`tools/narration-check.html`](tools/narration-check.html) opens
+straight from the filesystem and plays the same passage seven ways — one
+utterance, split with and without a lead-in, longer and shorter gaps, queued
+back to back — against any installed voice, so the question is settled by
+listening rather than by argument. A test asserts its variant C is exactly
+what the portal ships. Those pauses are part of how long a slide takes, so the build
 counts them — the course went from a reported nineteen minutes to a truthful
 twenty-one the moment they were added.
 

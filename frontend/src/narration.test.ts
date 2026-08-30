@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
-  Narrator, PAUSE, loadVoices, pauseSeconds, pickVoice, segment,
+  LEAD_IN, Narrator, PAUSE, loadVoices, pauseSeconds, pickVoice, segment,
   speechSupported,
 } from "./narration"
 import { installFakeSpeech } from "./test/speech"
@@ -10,6 +10,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
+
+/** The words handed to the synthesiser, less the sacrificial lead-in. */
+function said(fake: { spoken: { text: string }[] }): string[] {
+  return fake.spoken.map((u) => u.text.slice(LEAD_IN.length))
+}
 
 describe("choosing a voice", () => {
   it("prefers a British voice for a British script", () => {
@@ -131,7 +136,7 @@ describe("speaking", () => {
     await narrator.prepare()
     narrator.speak("Slide one.")
     narrator.speak("Slide two.")
-    expect(fake.spoken.map((u) => u.text)).toEqual(["Slide one.", "Slide two."])
+    expect(said(fake)).toEqual(["Slide one.", "Slide two."])
     expect(fake.synth.speaking).toBe(true)
   })
 
@@ -254,14 +259,13 @@ describe("speaking a whole slide", () => {
     const n = await narrator()
     n.speak("First sentence. Second sentence.")
 
-    expect(fake.spoken.map((u) => u.text)).toEqual(["First sentence."])
+    expect(said(fake)).toEqual(["First sentence."])
     fake.spoken[0].onend()
 
     // Still silent: the gap has not elapsed.
     expect(fake.spoken).toHaveLength(1)
     vi.advanceTimersByTime(PAUSE.sentence)
-    expect(fake.spoken.map((u) => u.text))
-      .toEqual(["First sentence.", "Second sentence."])
+    expect(said(fake)).toEqual(["First sentence.", "Second sentence."])
   })
 
   it("does not report the end until the last sentence is said", async () => {
@@ -298,7 +302,7 @@ describe("speaking a whole slide", () => {
     expect(fake.spoken).toHaveLength(1)
 
     n.resume()
-    expect(fake.spoken.map((u) => u.text)).toEqual(["First.", "Second."])
+    expect(said(fake)).toEqual(["First.", "Second."])
   })
 
   it("follows the transcript through the whole slide, not each sentence", async () => {
@@ -307,14 +311,71 @@ describe("speaking a whole slide", () => {
     const text = "First sentence. Second sentence."
     n.speak(text, { onWord })
 
-    fake.spoken[0].onboundary({ name: "word", charIndex: 6 })
+    // charIndex counts from the start of the utterance, lead-in included.
+    fake.spoken[0].onboundary({ name: "word", charIndex: LEAD_IN.length + 6 })
     expect(onWord).toHaveBeenLastCalledWith(6)
 
     fake.spoken[0].onend()
     vi.advanceTimersByTime(PAUSE.sentence)
-    // "sentence" inside the SECOND utterance is at index 7 of that utterance,
-    // and at 24 of the slide. The transcript needs the second number.
-    fake.spoken[1].onboundary({ name: "word", charIndex: 7 })
+    // "sentence" is at index 7 of the second sentence, and at 24 of the slide.
+    // The transcript needs the second number.
+    fake.spoken[1].onboundary({ name: "word", charIndex: LEAD_IN.length + 7 })
     expect(onWord).toHaveBeenLastCalledWith(text.indexOf("Second") + 7)
+  })
+})
+
+describe("the lead-in that gets clipped instead of a word", () => {
+  let fake: ReturnType<typeof installFakeSpeech>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    fake = installFakeSpeech()
+  })
+
+  async function narrator() {
+    const n = new Narrator()
+    await n.prepare()
+    return n
+  }
+
+  it("puts it in front of every sentence, not only the first", async () => {
+    // Chrome clips the opening of an UTTERANCE. One utterance per sentence
+    // means one clip per sentence, which is the original complaint moved.
+    const n = await narrator()
+    n.speak("First. Second. Third.")
+    fake.spoken[0].onend()
+    vi.advanceTimersByTime(PAUSE.sentence)
+    fake.spoken[1].onend()
+    vi.advanceTimersByTime(PAUSE.sentence)
+
+    expect(fake.spoken).toHaveLength(3)
+    for (const utterance of fake.spoken) {
+      expect(utterance.text.startsWith(LEAD_IN)).toBe(true)
+    }
+  })
+
+  it("is punctuation, so it is never read out as a word", () => {
+    expect(LEAD_IN).not.toMatch(/[A-Za-z0-9]/)
+    expect(LEAD_IN.length).toBeGreaterThan(0)
+  })
+
+  it("does not shift the transcript", async () => {
+    const n = await narrator()
+    const onWord = vi.fn()
+    n.speak("Alpha beta gamma.", { onWord })
+    // "beta" is at 6 in the script and at 6 + lead-in in the utterance.
+    fake.spoken[0].onboundary({ name: "word", charIndex: LEAD_IN.length + 6 })
+    expect(onWord).toHaveBeenLastCalledWith(6)
+  })
+
+  it("never reports a position before the sentence began", async () => {
+    // A boundary event landing inside the lead-in itself.
+    const n = await narrator()
+    const onWord = vi.fn()
+    n.speak("First. Second.", { onWord })
+    fake.spoken[0].onend()
+    vi.advanceTimersByTime(PAUSE.sentence)
+    fake.spoken[1].onboundary({ name: "word", charIndex: 0 })
+    expect(onWord).toHaveBeenLastCalledWith("First. Second.".indexOf("Second"))
   })
 })

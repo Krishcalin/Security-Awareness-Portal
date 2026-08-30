@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Narration bench — Security Awareness Portal</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         margin: 0 auto; max-width: 54rem; padding: 32px 24px 96px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 28px 0 8px; text-transform: uppercase;
+       letter-spacing: .06em; opacity: .65; }
+  p.lede { margin: 0 0 22px; opacity: .8; }
+  textarea { width: 100%; min-height: 8rem; font: inherit; padding: 10px;
+             border-radius: 8px; border: 1px solid rgb(128 128 128 / .4);
+             background: transparent; color: inherit; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+         margin: 12px 0; }
+  select, button { font: inherit; padding: 8px 12px; border-radius: 8px;
+                   border: 1px solid rgb(128 128 128 / .4);
+                   background: transparent; color: inherit; cursor: pointer; }
+  button.primary { background: #12615e; color: #fff; border-color: #12615e; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  th, td { text-align: left; padding: 9px 10px; vertical-align: top;
+           border-bottom: 1px solid rgb(128 128 128 / .25); }
+  th { font-size: 13px; opacity: .7; font-weight: 600; }
+  td.what { width: 40%; }
+  code { font-size: .92em; opacity: .85; }
+  .now { outline: 2px solid #12615e; outline-offset: 2px; border-radius: 6px; }
+  footer { margin-top: 34px; padding-top: 18px;
+           border-top: 1px solid rgb(128 128 128 / .25); opacity: .75;
+           font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Narration bench</h1>
+<p class="lede">
+  A reported fault — <em>the first word after a full stop is not heard</em> —
+  is an audio problem, and audio cannot be verified by reading code or by
+  looking at a screenshot. This page plays the same passage several ways so it
+  can be settled by listening. Play them in order and note which ones are
+  clean; the winner becomes how the portal speaks.
+</p>
+
+<h2>Passage</h2>
+<div class="row">
+  <select id="passage"></select>
+  <select id="voice"></select>
+</div>
+<textarea id="text" spellcheck="false"></textarea>
+<p class="lede" style="margin-top:10px">
+  The voice matters: this clipping is a property of the speech engine, so a
+  variant that is clean on one voice can be broken on another. If one voice is
+  hopeless on every variant, that is worth knowing too.
+</p>
+
+<h2>Variants</h2>
+<table>
+  <thead>
+    <tr><th class="what">How it is spoken</th><th>Why it might help</th><th></th></tr>
+  </thead>
+  <tbody id="variants"></tbody>
+</table>
+
+<div class="row">
+  <button id="stop">Stop</button>
+  <span id="status" aria-live="polite"></span>
+</div>
+
+<footer>
+  Open this file directly in the browser — it talks to nothing but the speech
+  engine. Variant <strong>C</strong> is what the portal does today.
+</footer>
+
+<script>
+// ── the passages ───────────────────────────────────────────────────────────
+// The first is a real slide. The second is built to expose the fault: every
+// sentence opens with a short word that carries the meaning, so losing it is
+// unmistakable rather than something you might talk yourself out of hearing.
+const PASSAGES = {
+  "Slide 11 — Ransomware: what to do":
+`One: disconnect from the network. Unplug the network cable and switch off Wi-Fi immediately. This limits how far the encryption can spread to shared drives and other systems. But do not power the machine off — valuable evidence lives in memory, and shutting down can destroy it.`,
+
+  "Diagnostic — short sentences, load-bearing first words":
+`Nine people replied. Ten did not. Yes means approve. No means deny. Stop before you click. Go only when you are sure. Never reuse a password. Always report a mistake.`,
+
+  "Slide 5 — Passwords":
+`Length beats complexity. A passphrase of four unrelated words is far harder to crack than a short string of symbols. Twelve characters is a floor, not a target. Use a password manager so you never have to remember them.`,
+};
+
+const PAUSE = { sentence: 350, clause: 200, paragraph: 650 };
+
+// Same rule as frontend/src/narration.ts.
+function segment(text) {
+  const out = [];
+  const boundary = /([.!?]+|[:;])(\s+|$)/g;
+  let cursor = 0, m;
+  while ((m = boundary.exec(text)) !== null) {
+    const end = m.index + m[1].length;
+    const spoken = text.slice(cursor, end).trim();
+    if (spoken) {
+      out.push({
+        text: spoken,
+        pauseAfter: /\n\s*\n/.test(m[2]) ? PAUSE.paragraph
+          : /[.!?]/.test(m[1]) ? PAUSE.sentence : PAUSE.clause,
+      });
+    }
+    cursor = end + m[2].length;
+  }
+  const tail = text.slice(cursor).trim();
+  if (tail) out.push({ text: tail, pauseAfter: 0 });
+  return out;
+}
+
+// ── the variants ───────────────────────────────────────────────────────────
+const VARIANTS = [
+  { id: "A", what: "One utterance for the whole passage",
+    why: "How it behaved before any of this. The engine decides the pauses.",
+    speak: (text, say) => say([{ text, pauseAfter: 0 }]) },
+
+  { id: "B", what: "A sentence at a time, 350ms of silence between",
+    why: "Real silence after each full stop, and nothing else.",
+    speak: (text, say) => say(segment(text)) },
+
+  { id: "C", what: "Sentences, 350ms, each led by a comma",
+    why: "The comma is there to be clipped instead of the first word. This is what the portal does now.",
+    speak: (text, say) => say(segment(text), ", ") },
+
+  { id: "D", what: "Sentences, 350ms, each led by a full stop",
+    why: "A longer lead-in than a comma, in case a comma is too short to absorb the clip.",
+    speak: (text, say) => say(segment(text), ". ") },
+
+  { id: "E", what: "Sentences, 120ms, each led by a comma",
+    why: "If the engine closes the audio device during a long gap, a shorter one may avoid the clip entirely.",
+    speak: (text, say) => say(segment(text).map(s => ({ ...s, pauseAfter: 120 })), ", ") },
+
+  { id: "F", what: "Sentences queued back to back, no timer",
+    why: "The engine never goes idle, so it never has to start up again. The only pause is the comma.",
+    speak: (text, say) => say(segment(text).map(s => ({ ...s, pauseAfter: 0 })), ", ") },
+
+  { id: "G", what: "One utterance, blank line between sentences",
+    why: "Ask the engine for its own paragraph pause rather than managing it here.",
+    speak: (text, say) =>
+      say([{ text: segment(text).map(s => s.text).join("\n\n"), pauseAfter: 0 }]) },
+];
+
+// ── plumbing ───────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+let token = 0, timer = null;
+
+function stop() {
+  token++;
+  if (timer) { clearTimeout(timer); timer = null; }
+  speechSynthesis.cancel();
+  document.querySelectorAll(".now").forEach(el => el.classList.remove("now"));
+  $("status").textContent = "";
+}
+
+function play(variant, button) {
+  stop();
+  const mine = ++token;
+  button.classList.add("now");
+  $("status").textContent = "Playing " + variant.id + "…";
+
+  const chosen = speechSynthesis.getVoices()
+    .find(v => v.name === $("voice").value) || null;
+
+  variant.speak($("text").value, (pieces, lead = "") => {
+    let i = 0;
+    const next = () => {
+      if (mine !== token) return;
+      const piece = pieces[i];
+      if (!piece) {
+        button.classList.remove("now");
+        $("status").textContent = "Finished " + variant.id + ".";
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(lead + piece.text);
+      if (chosen) { utterance.voice = chosen; utterance.lang = chosen.lang; }
+      utterance.onend = () => {
+        if (mine !== token) return;
+        i += 1;
+        if (piece.pauseAfter > 0) timer = setTimeout(next, piece.pauseAfter);
+        else next();
+      };
+      utterance.onerror = () => { if (mine === token) next(); };
+      speechSynthesis.speak(utterance);
+    };
+    next();
+  });
+}
+
+function fillVoices() {
+  const voices = speechSynthesis.getVoices()
+    .filter(v => (v.lang || "").toLowerCase().startsWith("en"));
+  const select = $("voice");
+  const previous = select.value;
+  select.innerHTML = "";
+  for (const v of voices) {
+    const option = document.createElement("option");
+    option.value = option.textContent = v.name;
+    option.textContent = v.name + " — " + v.lang +
+      (v.localService ? " (on this machine)" : " (network)");
+    select.append(option);
+  }
+  if (previous) select.value = previous;
+  else {
+    const gb = voices.find(v => (v.lang || "").toLowerCase().startsWith("en-gb"));
+    if (gb) select.value = gb.name;
+  }
+}
+
+for (const name of Object.keys(PASSAGES)) {
+  const option = document.createElement("option");
+  option.value = option.textContent = name;
+  $("passage").append(option);
+}
+$("passage").addEventListener("change", () => {
+  $("text").value = PASSAGES[$("passage").value];
+});
+$("text").value = PASSAGES[Object.keys(PASSAGES)[0]];
+
+for (const variant of VARIANTS) {
+  const row = document.createElement("tr");
+  row.innerHTML = "<td class=what><strong>" + variant.id + "</strong> &nbsp; " +
+    variant.what + "</td><td>" + variant.why + "</td>";
+  const cell = document.createElement("td");
+  const button = document.createElement("button");
+  button.className = "primary";
+  button.textContent = "Play " + variant.id;
+  button.addEventListener("click", () => play(variant, button));
+  cell.append(button);
+  row.append(cell);
+  $("variants").append(row);
+}
+
+$("stop").addEventListener("click", stop);
+speechSynthesis.addEventListener("voiceschanged", fillVoices);
+fillVoices();
+</script>
+</body>
+</html>

@@ -279,3 +279,28 @@ def test_nothing_in_the_script_would_be_mis_split_into_two_sentences(module_json
             assert not found, ("slide %d contains %s (%r), which the sentence "
                                "splitter would get wrong"
                                % (lesson["ordinal"], description, found[:3]))
+
+
+def test_the_narration_bench_speaks_the_way_the_portal_does():
+    """`tools/narration-check.html` stands alone so it can be opened from a
+    file, which means it carries its own copy of the delivery rules. A bench
+    that has drifted from the player sends somebody chasing a variant that is
+    not the one they are hearing complaints about."""
+    import re
+    bench = (ROOT / "tools" / "narration-check.html").read_text(encoding="utf-8")
+    player = (ROOT / "frontend" / "src" / "narration.ts").read_text(
+        encoding="utf-8")
+
+    def pauses(text, pattern):
+        block = re.search(pattern, text, re.S).group(1)
+        return {name: int(value)
+                for name, value in re.findall(r"(\w+):\s*(\d+)", block)}
+
+    assert pauses(bench, r"const PAUSE = \{(.*?)\};") == \
+        pauses(player, r"export const PAUSE = \{(.*?)\n\}") == bc.PAUSE_MS
+
+    lead = re.search(r'export const LEAD_IN = "(.*?)"', player).group(1)
+    variant_c = re.search(
+        r'speak: \(text, say\) => say\(segment\(text\), "(.*?)"\)', bench)
+    assert variant_c and variant_c.group(1) == lead, (
+        "variant C is meant to be exactly what the portal ships")

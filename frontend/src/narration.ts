@@ -62,6 +62,22 @@ export const PAUSE = {
   paragraph: 650,
 }
 
+/**
+ * Spoken before every sentence, to be swallowed instead of the first word.
+ *
+ * Chrome on Windows clips the opening of an utterance — the audio device is
+ * still starting when the synthesiser begins, and roughly the first tenth of a
+ * second is lost. On one utterance per slide that costs the first word of the
+ * slide; on one utterance per sentence it costs the first word of every
+ * sentence, which is the same complaint in a new place.
+ *
+ * A leading comma gives the clip something to eat. It is not read aloud, it
+ * makes a short prosodic pause, and if the browser does not clip it the pause
+ * is welcome anyway. Every character of it is subtracted back out of the
+ * word-boundary offsets, so the transcript is unaffected.
+ */
+export const LEAD_IN = ", "
+
 /** Chrome's ~15s cut-off; nudged well inside it. */
 const KEEPALIVE_MS = 10_000
 
@@ -247,7 +263,7 @@ export class Narrator {
       return
     }
 
-    const utterance = new SpeechSynthesisUtterance(piece.text)
+    const utterance = new SpeechSynthesisUtterance(LEAD_IN + piece.text)
     if (this.voice) {
       utterance.voice = this.voice
       utterance.lang = this.voice.lang
@@ -289,8 +305,10 @@ export class Narrator {
         if (mine !== this.token) return
         if (event.name === "word" || event.name === undefined) {
           // Offset into the whole narration, not into this sentence, or the
-          // transcript would highlight from the top on every full stop.
-          this.options.onWord?.(piece.start + event.charIndex)
+          // transcript would highlight from the top on every full stop — and
+          // less the lead-in, which is not part of the script.
+          this.options.onWord?.(Math.max(
+            piece.start, piece.start + event.charIndex - LEAD_IN.length))
         }
       }
     }
