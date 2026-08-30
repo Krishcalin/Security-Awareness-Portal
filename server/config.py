@@ -67,6 +67,24 @@ class Settings:
             "SMTP_STARTTLS", "1").lower() not in ("0", "false", "no")
         self.smtp_timeout: int = int(os.environ.get("SMTP_TIMEOUT", "20"))
 
+        # Addresses that may re-open a course they have already passed, so
+        # that whoever writes and checks the material can look at it without
+        # having to be somebody who has never taken it.
+        #
+        # THIS ONLY GIVES BACK THE SLIDES. The knowledge check stays closed to
+        # them like everybody else, and no second certificate can be issued:
+        # an exception that let somebody retake their own assessment would be
+        # an exception that lets them rewrite their own compliance record, and
+        # that is a different thing entirely from reading the material again.
+        #
+        # Named addresses rather than a role, because a role is something
+        # somebody can be granted and this is meant to be a short list that a
+        # person edits on purpose. Empty by default.
+        self.content_reviewers: set = {
+            address.strip().casefold()
+            for address in os.environ.get("CONTENT_REVIEWERS", "").split(",")
+            if address.strip()}
+
         # Lets /auth/dev redeem a session token minted from the shell, so
         # the app can be opened in a browser before Entra is configured.
         # Off unless asked for, and refused outright once Entra IS

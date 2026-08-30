@@ -50,9 +50,27 @@ log = logging.getLogger(__name__)
 MAX_SANE_TOOK_MS = 30 * 60 * 1000
 
 
+def _may_review(learner) -> bool:
+    """Whether this person may look at a course they have already passed.
+
+    For the people who write and check the material. It gives back the slides
+    and nothing else — see `content_reviewers` in server/config.py for why the
+    knowledge check is not part of it.
+    """
+    return bool(settings.content_reviewers) and \
+        (learner.get("email") or "").casefold() in settings.content_reviewers
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.validate()
+    if settings.content_reviewers:
+        # At WARNING, and naming them. An exception nobody can see in the log
+        # is one that survives into production because nobody remembered it
+        # was there.
+        log.warning("CONTENT_REVIEWERS is set: %s may re-open a course they "
+                    "have already passed. The knowledge check stays closed to "
+                    "them.", ", ".join(sorted(settings.content_reviewers)))
     db.init_schema()
     for summary in ingest.sync():
         log.info("content loaded: %(slug)s (%(lessons)d lessons, "
@@ -255,7 +273,7 @@ def modules(learner: Dict[str, Any] = Depends(auth.current_learner)):
     that, instead of rounding to "not completed" alongside the people who
     never opened it.
     """
-    return db.query(
+    listed = db.query(
         """
         SELECT m.slug, m.title, m.summary, m.minutes, m.topic,
                m.content_hash,
@@ -295,6 +313,12 @@ def modules(learner: Dict[str, Any] = Depends(auth.current_learner)):
         ORDER BY m.sort_order, m.id
         """,
         {"learner": learner["id"], "quiz_length": settings.quiz_length})
+    reviewer = _may_review(learner)
+    for row in listed:
+        # Without this the front page offers no way into a course somebody has
+        # passed, and a reviewer allowed to read it again has nowhere to click.
+        row["reviewing"] = reviewer and row["passed"]
+    return listed
 
 
 @app.get("/api/modules/{slug}")
@@ -318,6 +342,7 @@ def module_detail(slug: str,
         "FROM lesson WHERE module_id = %s ORDER BY ordinal",
         (module["id"],))
     passed = _already_passed(learner["id"], module["id"])
+    reviewing = bool(passed) and _may_review(learner)
 
     enrolment = db.one(
         "SELECT started_at, completed_at, furthest_ordinal FROM enrolment "
@@ -337,8 +362,13 @@ def module_detail(slug: str,
         # record; it is not an attempt to make the material unreachable. The
         # artwork and the recordings are served from /media, which is static
         # and unauthenticated, so anybody with a URL still has them.
-        "lessons": [] if passed else lessons,
+        "lessons": [] if passed and not reviewing else lessons,
         "completed": passed,
+        # Set when somebody is being shown a course they have already passed
+        # because their address is listed. The screen says so: an exception
+        # that looks from the inside exactly like not having passed is one
+        # that gets mistaken for a bug in the lock.
+        "reviewing": reviewing,
         # How many they will be asked, and how large a bank that is drawn
         # from — the second is worth saying, because it is the reason a retake
         # is not the same quiz over again.
@@ -359,6 +389,15 @@ def record_progress(slug: str, progress: Progress,
         # Nothing left to record. Somebody with a tab still open from before
         # they passed must not be able to move the record behind the
         # certificate that has already been issued.
+        if _may_review(learner):
+            # A reviewer re-reading the course is not making progress through
+            # it. Accepted and dropped rather than refused, so that looking at
+            # the material does not fill the console with errors — and their
+            # own record does not move either way.
+            return db.one(
+                "SELECT furthest_ordinal, last_ordinal FROM enrolment "
+                "WHERE learner_id = %s AND module_id = %s",
+                (learner["id"], module["id"]))
         raise HTTPException(status_code=409,
                             detail="this training has already been passed")
     row = db.one(

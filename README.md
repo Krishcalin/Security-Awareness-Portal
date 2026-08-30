@@ -101,7 +101,7 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 267, needs the database from docker compose
+python -m pytest                # 274, needs the database from docker compose
 cd frontend && npm test         # 121
 ```
 
@@ -409,10 +409,27 @@ Somebody who has passed still sees where the course was: the date, the score,
 which attempt, the serial, and a button that downloads the certificate. Closed
 is not hidden — the person has to be able to see that they did it.
 
-**There is no way to reopen one yet.** Periodic re-training is a requirement
-in this sector, and when it comes round this will need a way to begin a new
-cycle without deleting the record of the last one. Today the only lever is
-removing the certificate row by hand, which takes the evidence with it.
+**One exception, named and noisy.** `CONTENT_REVIEWERS` is a list of email
+addresses that may re-open a course they have already passed, so that whoever
+writes and checks the material can look at it without having to be somebody
+who never took it.
+
+It gives back the slides and **nothing else**. The knowledge check stays
+closed to them like everybody else, no second certificate can be issued, and
+walking the course again writes nothing — reading the material and sitting the
+assessment are different things, and one of them is overwriting your own
+compliance record. The player says on screen that this is what is happening,
+because an exception that looks from the inside exactly like not having passed
+is one that gets mistaken for a bug in the lock. The server logs a warning
+naming everybody on the list every time it starts, so it cannot sit in a
+deployment unnoticed. Empty unless somebody sets it.
+
+**There is no way to reopen a completion properly yet.** Periodic re-training
+is a requirement in this sector, and when it comes round this will need a way
+to begin a new cycle without deleting the record of the last one. Today the
+only lever is removing the certificate row by hand, which takes the evidence
+with it. `CONTENT_REVIEWERS` is not that mechanism and is not a substitute for
+it: it lets somebody read a course again, not take it again.
 
 
 ## Picking up where you left off

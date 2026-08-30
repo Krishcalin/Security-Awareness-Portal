@@ -392,7 +392,7 @@ export function Player() {
   // Before the loading check below, because a completed module arrives with no
   // lessons — the server stops serving them — and `!lesson` would otherwise
   // leave somebody who has passed staring at "Loading…" for ever.
-  if (detail?.completed) {
+  if (detail?.completed && !detail.reviewing) {
     return <Completed title={detail.title} completed={detail.completed} />
   }
   if (!detail || !lesson) {
@@ -408,6 +408,18 @@ export function Player() {
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
+      {/* Said plainly, every time. An exception that looks from the inside
+          exactly like not having passed is one that gets mistaken for a bug in
+          the lock — and one that nobody notices is still switched on. */}
+      {detail.reviewing && (
+        <p className="mb-4 rounded-lg border border-line bg-sunk px-4 py-3
+                      text-sm text-muted" role="status">
+          You have already passed this course. You are seeing it because your
+          address is listed in <code>CONTENT_REVIEWERS</code>. Nothing here is
+          being recorded against you, and the knowledge check stays closed.
+        </p>
+      )}
+
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="text-lg font-semibold">{detail.title}</h1>
         <span className="text-sm text-muted tabular-nums">

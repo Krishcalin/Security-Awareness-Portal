@@ -60,6 +60,16 @@ services:
       # sign-in.
       ALLOW_DEV_SIGNIN: "1"
 
+      # Addresses that may re-open a course they have already passed, so the
+      # course can be looked at by whoever is building it without having to be
+      # somebody who never took it. The slides come back; the knowledge check
+      # stays closed and no second certificate can be issued.
+      #
+      # A development convenience, and it does not belong in a real
+      # deployment — the server logs a warning naming everybody on the list
+      # every time it starts, so it cannot sit there unnoticed.
+      CONTENT_REVIEWERS: krishnendu.de@mycompanydomain.com
+
       PASS_MARK: "0.70"
       CERTIFICATE_FROM: ciso@mycompanydomain.com
       CERTIFICATE_FROM_NAME: Chief Information Security Officer

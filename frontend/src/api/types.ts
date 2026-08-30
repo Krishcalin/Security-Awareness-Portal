@@ -29,6 +29,10 @@ export interface ModuleSummary {
    *  certificate. The browser is not asked to work it out from a score,
    *  because then there are two answers to the same question. */
   passed: boolean
+  /** Being shown a course this person has already passed, because their
+   *  address is listed in CONTENT_REVIEWERS. The slides come back; the
+   *  knowledge check does not. */
+  reviewing: boolean
   certificate_serial: string | null
   /** How many are in the bank the ten are drawn from. `questions` above is
    *  what a learner actually answers. */
@@ -82,6 +86,9 @@ export interface ModuleDetail {
    *  somebody who has passed, rather than trusting the browser to hide it. */
   lessons: Lesson[]
   completed: Completion | null
+  /** See ModuleSummary above. When this is set, `completed` is too — and the
+   *  slides are served anyway. */
+  reviewing: boolean
   question_count: number
   question_bank: number
   enrolment: Enrolment | null

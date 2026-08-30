@@ -179,3 +179,105 @@ def test_the_export_carries_the_completion(person):
     csv = person.get("/api/report/%s/export.csv" % SLUG)
     assert csv.status_code == 200
     assert "j.rao@example.com" in csv.text
+
+
+# --------------------------------------------------------------------------
+# The exception, and the half of it that is not an exception
+# --------------------------------------------------------------------------
+
+@pytest.fixture
+def reviewer(person, monkeypatch):
+    """The person, with their address on the reviewers list."""
+    from server.config import settings
+    monkeypatch.setattr(settings, "content_reviewers", {"j.rao@example.com"})
+    return person
+
+
+@needs_db
+def test_a_reviewer_gets_the_slides_back(reviewer):
+    sit(reviewer, 10)
+    detail = reviewer.get("/api/modules/%s" % SLUG).json()
+    assert len(detail["lessons"]) > 1
+    assert detail["reviewing"] is True
+    # And the record is still there to be shown beside them: the screen says
+    # which of the two situations this is.
+    assert detail["completed"]["serial"]
+
+
+@needs_db
+def test_a_reviewer_still_cannot_retake_the_check(reviewer):
+    """The line this exception does not cross.
+
+    Reading the material again and sitting the assessment again are different
+    things. One is looking at a course; the other is overwriting your own
+    compliance record, and no convenience is worth making that possible.
+    """
+    sit(reviewer, 10)
+    refused = reviewer.post("/api/modules/%s/attempts" % SLUG)
+    assert refused.status_code == 409
+
+
+@needs_db
+def test_a_reviewer_walking_the_course_again_moves_nothing(reviewer):
+    """Their own record must read the same before and after."""
+    from server import db
+    sit(reviewer, 10)
+    before = db.one(
+        "SELECT furthest_ordinal, last_ordinal, completed_at FROM enrolment "
+        "WHERE learner_id = (SELECT id FROM learner WHERE email = %s)",
+        ("j.rao@example.com",))
+
+    walked = reviewer.post("/api/modules/%s/progress" % SLUG,
+                           json={"furthest_ordinal": 3})
+    assert walked.status_code == 200            # not an error, and not a write
+
+    after = db.one(
+        "SELECT furthest_ordinal, last_ordinal, completed_at FROM enrolment "
+        "WHERE learner_id = (SELECT id FROM learner WHERE email = %s)",
+        ("j.rao@example.com",))
+    assert after == before
+
+
+@needs_db
+def test_the_exception_is_off_unless_somebody_is_named(person):
+    """Empty by default. A bypass that is on when nobody configured it is the
+    kind that ships."""
+    from server.config import settings
+    assert settings.content_reviewers == set() or \
+        "j.rao@example.com" not in settings.content_reviewers
+    sit(person, 10)
+    assert person.get("/api/modules/%s" % SLUG).json()["lessons"] == []
+
+
+@needs_db
+def test_it_applies_to_the_named_address_and_nobody_else(person, monkeypatch):
+    from server.config import settings
+    monkeypatch.setattr(settings, "content_reviewers",
+                        {"somebody.else@example.com"})
+    sit(person, 10)
+    detail = person.get("/api/modules/%s" % SLUG).json()
+    assert detail["lessons"] == []
+    assert detail["reviewing"] is False
+
+
+@needs_db
+def test_the_address_is_matched_without_regard_to_case(person, monkeypatch):
+    """Directories are inconsistent about capitals, and a list that misses
+    somebody because of one is a list that looks broken."""
+    from server.config import settings
+    monkeypatch.setattr(settings, "content_reviewers", {"j.rao@example.com"})
+    sit(person, 10)
+    from server import db
+    db.execute("UPDATE learner SET email = %s WHERE email = %s",
+               ("J.Rao@Example.com", "j.rao@example.com"))
+    assert len(person.get("/api/modules/%s" % SLUG).json()["lessons"]) > 1
+
+
+@needs_db
+def test_the_front_page_offers_a_way_back_in(reviewer):
+    """Without it the exception exists and there is nowhere to click."""
+    sit(reviewer, 10)
+    mine = [m for m in reviewer.get("/api/modules").json()
+            if m["slug"] == SLUG][0]
+    assert mine["passed"] is True
+    assert mine["reviewing"] is True

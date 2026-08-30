@@ -129,7 +129,7 @@ export function Home() {
                   {/* A course somebody has passed is not offered again. The
                       server stops serving its slides, so a Start button here
                       would be a button that goes nowhere. */}
-                  {!module.passed && (
+                  {(!module.passed || module.reviewing) && (
                     <Link
                       to={`/module/${module.slug}${resumeAt}`}
                       className="inline-flex items-center justify-center gap-2
@@ -137,7 +137,8 @@ export function Home() {
                                  font-medium text-white hover:opacity-90"
                     >
                       <PlayCircle size={17} aria-hidden />
-                      {module.furthest_ordinal > 0 ? "Resume" : "Start"}
+                      {module.reviewing ? "Review"
+                       : module.furthest_ordinal > 0 ? "Resume" : "Start"}
                     </Link>
                   )}
                   {module.certificate_serial && (
