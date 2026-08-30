@@ -448,9 +448,10 @@ def test_the_sign_in_page_says_nothing_about_the_course(clean, microsoft):
     microsoft()
     page = clean.get("/auth/login", follow_redirects=False).text
     assert ">Login<" in page
-    # The two sentences that used to sit here, named rather than asserted
-    # away with a bare "minutes" — the word appears legitimately further
-    # down, in the line about what this course spends twenty minutes on.
+    # The two sentences that used to sit here, named individually: a page
+    # that must not mention "minutes" at all is a rule about a word, and the
+    # next person to write a sentence containing one would be the one to
+    # find out.
     assert "minutes, narrated" not in page
     assert "brings you back to the slide you left" not in page
 
