@@ -55,13 +55,33 @@ export interface Enrolment {
   furthest_ordinal: number
 }
 
+/**
+ * A successful completion, as it was recorded at the time.
+ *
+ * This IS the certificate row rather than a copy of it: the attempt that
+ * earned it, the score as it stood, and the date. The pass mark is a setting
+ * that can change, so a figure worked out fresh each time would quietly
+ * un-pass people the day somebody moved the threshold.
+ */
+export interface Completion {
+  serial: string
+  issued_at: string
+  score: number
+  out_of: number
+  name_printed: string
+  attempt_no: number
+}
+
 export interface ModuleDetail {
   slug: string
   title: string
   summary: string
   minutes: number
   content_hash: string
+  /** Empty once `completed` is set: the server stops serving the deck to
+   *  somebody who has passed, rather than trusting the browser to hide it. */
   lessons: Lesson[]
+  completed: Completion | null
   question_count: number
   question_bank: number
   enrolment: Enrolment | null

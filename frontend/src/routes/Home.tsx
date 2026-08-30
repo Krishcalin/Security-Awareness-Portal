@@ -15,6 +15,14 @@ import type { ModuleSummary } from "../api/types"
  * throws that away. The two are separate lines here.
  */
 function standing(module: ModuleSummary): { label: string; tone: string } {
+  if (module.passed) {
+    return {
+      label: `Completed · ${module.latest_score} of ${module.questions}` +
+        (module.attempts && module.attempts > 1
+          ? ` · attempt ${module.attempts}` : ""),
+      tone: "text-right",
+    }
+  }
   if (module.latest_score !== null && module.attempts) {
     return {
       label: `${module.latest_score} of ${module.questions}` +
@@ -118,15 +126,20 @@ export function Home() {
                   </div>
                 </div>
                 <div className="flex flex-col items-stretch gap-2">
-                  <Link
-                    to={`/module/${module.slug}${resumeAt}`}
-                    className="inline-flex items-center justify-center gap-2
-                               rounded-lg bg-accent px-4 py-2 text-sm
-                               font-medium text-white hover:opacity-90"
-                  >
-                    <PlayCircle size={17} aria-hidden />
-                    {module.furthest_ordinal > 0 ? "Resume" : "Start"}
-                  </Link>
+                  {/* A course somebody has passed is not offered again. The
+                      server stops serving its slides, so a Start button here
+                      would be a button that goes nowhere. */}
+                  {!module.passed && (
+                    <Link
+                      to={`/module/${module.slug}${resumeAt}`}
+                      className="inline-flex items-center justify-center gap-2
+                                 rounded-lg bg-accent px-4 py-2 text-sm
+                                 font-medium text-white hover:opacity-90"
+                    >
+                      <PlayCircle size={17} aria-hidden />
+                      {module.furthest_ordinal > 0 ? "Resume" : "Start"}
+                    </Link>
+                  )}
                   {module.certificate_serial && (
                     <a
                       href={certificateUrl(module.certificate_serial)}

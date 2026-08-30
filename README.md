@@ -101,7 +101,7 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 256, needs the database from docker compose
+python -m pytest                # 267, needs the database from docker compose
 cd frontend && npm test         # 121
 ```
 
@@ -365,6 +365,55 @@ a copy, never the delivery mechanism.
 > have a strict DMARC policy, which is the point of having one. This host must
 > be an authorised sender in the domain's SPF record, and the message ought to
 > be DKIM-signed. Leave `SMTP_HOST` unset and nothing is sent at all.
+
+---
+
+## Once it has been passed, it closes
+
+Passing is final. The slides and the knowledge check are not offered again,
+and three doors shut on the server rather than in the browser — a rule the
+client enforces is a rule that holds until somebody opens the network tab, and
+what is being protected here is a compliance record.
+
+| | |
+|---|---|
+| the deck | `GET /api/modules/<slug>` returns no lessons, and the completion instead |
+| the questions | a second attempt is refused with 409 |
+| the progress record | refused too, so a tab left open from before cannot write behind the certificate |
+
+Resume stops pointing back into it, which matters more than it sounds: sending
+somebody to slide twelve of a course they finished last month is the portal
+telling them it has not noticed.
+
+**Why no retake after a pass.** A second attempt could only repeat the result
+or contradict it, and the second is worse — a report showing somebody passed
+and then failed says something about them that the certificate in their inbox
+denies. Failing and coming back is untouched: somebody who scored six out of
+ten needs the material more than anybody, not less, and their retake is a
+different ten drawn from the hundred.
+
+**What closing is not.** It is not a content lock. The artwork and the
+recordings are served from `/media`, which is static and unauthenticated, so
+anybody holding a URL still has them. This closes the course and protects the
+record; claiming more than that would be the more dangerous of the two
+mistakes.
+
+**The record of a successful completion is the certificate row.** Not a second
+`passed` flag on the enrolment: a second place to write it down is a second
+place for it to disagree, and the pass mark is a setting. A figure worked out
+fresh each time would quietly un-pass people the day somebody moved the
+threshold, while a certificate is a statement about a moment, with the score
+and the name as they stood.
+
+Somebody who has passed still sees where the course was: the date, the score,
+which attempt, the serial, and a button that downloads the certificate. Closed
+is not hidden — the person has to be able to see that they did it.
+
+**There is no way to reopen one yet.** Periodic re-training is a requirement
+in this sector, and when it comes round this will need a way to begin a new
+cycle without deleting the record of the last one. Today the only lever is
+removing the certificate row by hand, which takes the evidence with it.
+
 
 ## Picking up where you left off
 

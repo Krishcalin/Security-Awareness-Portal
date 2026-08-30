@@ -207,7 +207,7 @@ export function Report() {
                   <th className="p-3">Got as far as</th>
                   <th className="p-3">Reached the end</th>
                   <th className="p-3 text-right tabular-nums">Score</th>
-                  <th className="p-3">Passed</th>
+                  <th className="p-3">Completed successfully</th>
                 </tr>
               </thead>
               <tbody>
@@ -233,14 +233,26 @@ export function Report() {
                     </td>
                     <td className="p-3">
                       {person.certificate ? (
-                        <span className="text-right">
-                          Yes
-                          {person.passed_on_attempt &&
-                            person.passed_on_attempt > 1 &&
-                            <span className="text-muted">
-                              {" "}· attempt {person.passed_on_attempt}
-                            </span>}
-                        </span>
+                        <>
+                          {/* The date is the answer to the question an
+                              auditor actually asks, which is not "did they"
+                              but "when, and can I see the document". */}
+                          <div className="text-right tabular-nums">
+                            {person.issued_at
+                              ? new Date(person.issued_at).toLocaleDateString(
+                                  undefined, { day: "numeric", month: "short",
+                                               year: "numeric" })
+                              : "Yes"}
+                          </div>
+                          <div className="text-xs text-muted tabular-nums">
+                            {person.certificate}
+                            {person.passed_on_attempt
+                              ? person.passed_on_attempt > 1
+                                ? ` · attempt ${person.passed_on_attempt}`
+                                : " · first attempt"
+                              : ""}
+                          </div>
+                        </>
                       ) : (
                         <span className="text-muted">No</span>
                       )}

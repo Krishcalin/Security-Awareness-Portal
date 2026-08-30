@@ -7,6 +7,7 @@ import {
 import { api } from "../api/client"
 import type { Lesson, ModuleDetail } from "../api/types"
 import { Narrator, type NarratorStatus } from "../narration"
+import { Completed } from "./Completed"
 
 /** Seconds as a listener reads them. */
 function clock(seconds: number): string {
@@ -387,6 +388,12 @@ export function Player() {
 
   if (problem) {
     return <p className="mx-auto max-w-4xl px-5 py-10 text-wrong">{problem}</p>
+  }
+  // Before the loading check below, because a completed module arrives with no
+  // lessons — the server stops serving them — and `!lesson` would otherwise
+  // leave somebody who has passed staring at "Loading…" for ever.
+  if (detail?.completed) {
+    return <Completed title={detail.title} completed={detail.completed} />
   }
   if (!detail || !lesson) {
     return <p className="mx-auto max-w-4xl px-5 py-10 text-muted">Loading…</p>

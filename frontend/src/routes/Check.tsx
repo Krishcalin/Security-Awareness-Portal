@@ -5,7 +5,8 @@ import {
 } from "lucide-react"
 
 import { api, certificateUrl } from "../api/client"
-import type { Result, Reveal, StartedAttempt } from "../api/types"
+import { Completed } from "./Completed"
+import type { Completion, Result, Reveal, StartedAttempt } from "../api/types"
 
 /**
  * The knowledge check.
@@ -21,6 +22,8 @@ export function Check() {
   const { slug = "" } = useParams()
   const [attempt, setAttempt] = useState<StartedAttempt | null>(null)
   const [problem, setProblem] = useState("")
+  const [finished, setFinished] = useState<
+    { title: string; completed: Completion } | null>(null)
   const [position, setPosition] = useState(0)
   const [chosen, setChosen] = useState<number | null>(null)
   const [reveal, setReveal] = useState<Reveal | null>(null)
@@ -29,8 +32,16 @@ export function Check() {
   const shownAt = useRef(Date.now())
 
   useEffect(() => {
-    api.startAttempt(slug).then(setAttempt)
-      .catch((error) => setProblem(String(error.message)))
+    api.startAttempt(slug).then(setAttempt).catch((error) => {
+      // The server refuses a second attempt once this training has been
+      // passed. That is not an error to show somebody in red — it is the
+      // certificate they already hold, so go and fetch the details of it.
+      api.module(slug)
+        .then((detail) => detail.completed
+          ? setFinished({ title: detail.title, completed: detail.completed })
+          : setProblem(String(error.message)))
+        .catch(() => setProblem(String(error.message)))
+    })
   }, [slug])
 
   useEffect(() => {
@@ -39,6 +50,9 @@ export function Check() {
     setReveal(null)
   }, [position])
 
+  if (finished) {
+    return <Completed title={finished.title} completed={finished.completed} />
+  }
   if (problem) {
     return <p className="mx-auto max-w-2xl px-5 py-10 text-wrong">{problem}</p>
   }

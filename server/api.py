@@ -222,6 +222,30 @@ def me(learner: Dict[str, Any] = Depends(auth.current_learner)):
             "role": learner.get("role", "learner")}
 
 
+def _already_passed(learner_id: int, module_id: int):
+    """The certificate this person already holds for this module, or None.
+
+    THE CERTIFICATE ROW IS THE RECORD OF A SUCCESSFUL COMPLETION. It names the
+    attempt that earned it, the score as it stood, the date, and the name as
+    printed. There is deliberately no second `passed` flag on the enrolment:
+    a second place to write it down is a second place for it to disagree, and
+    the pass mark is a setting that can change — a flag derived fresh each time
+    would quietly un-pass people the day somebody moved the threshold, while a
+    certificate is a statement about a moment that stays true.
+
+    The earliest one, when there are several. A retake that passes again does
+    not move the date somebody completed the training.
+    """
+    return db.one(
+        """
+        SELECT c.serial, c.issued_at, c.score, c.out_of, c.name_printed,
+               a.attempt_no
+        FROM certificate c JOIN attempt a ON a.id = c.attempt_id
+        WHERE c.learner_id = %s AND c.module_id = %s
+        ORDER BY c.issued_at LIMIT 1
+        """, (learner_id, module_id))
+
+
 @app.get("/api/modules")
 def modules(learner: Dict[str, Any] = Depends(auth.current_learner)):
     """Every published module, with this learner's standing in each.
@@ -293,6 +317,8 @@ def module_detail(slug: str,
         "audio_timings_url, narration_seconds "
         "FROM lesson WHERE module_id = %s ORDER BY ordinal",
         (module["id"],))
+    passed = _already_passed(learner["id"], module["id"])
+
     enrolment = db.one(
         "SELECT started_at, completed_at, furthest_ordinal FROM enrolment "
         "WHERE learner_id = %s AND module_id = %s",
@@ -303,7 +329,16 @@ def module_detail(slug: str,
         "summary": module["summary"],
         "minutes": module["minutes"],
         "content_hash": module["content_hash"],
-        "lessons": lessons,
+        # Withheld once the training has been passed, rather than left to the
+        # browser to hide. A rule the client enforces is a rule that holds
+        # until somebody opens the network tab.
+        #
+        # WHAT THIS IS AND IS NOT. It closes the course and protects the
+        # record; it is not an attempt to make the material unreachable. The
+        # artwork and the recordings are served from /media, which is static
+        # and unauthenticated, so anybody with a URL still has them.
+        "lessons": [] if passed else lessons,
+        "completed": passed,
         # How many they will be asked, and how large a bank that is drawn
         # from — the second is worth saying, because it is the reason a retake
         # is not the same quiz over again.
@@ -320,6 +355,12 @@ def record_progress(slug: str, progress: Progress,
     """How far they have got. Only ever moves forward — scrolling back to
     slide two does not mean they have unlearned slides three to eight."""
     module = _module(slug)
+    if _already_passed(learner["id"], module["id"]):
+        # Nothing left to record. Somebody with a tab still open from before
+        # they passed must not be able to move the record behind the
+        # certificate that has already been issued.
+        raise HTTPException(status_code=409,
+                            detail="this training has already been passed")
     row = db.one(
         """
         INSERT INTO enrolment (learner_id, module_id, started_at,
@@ -352,6 +393,15 @@ def start_attempt(slug: str,
     this person need" and start meaning "how flaky is their wifi".
     """
     module = _module(slug)
+    passed = _already_passed(learner["id"], module["id"])
+    if passed:
+        # The attempt that earned the certificate is the record. Another one
+        # could only either repeat it or contradict it, and the second is
+        # worse: a report showing somebody passed and then failed says
+        # something about them that the certificate in their inbox denies.
+        raise HTTPException(status_code=409,
+                            detail="this training has already been passed")
+
     questions = _questions(module["id"])
     if not questions:
         raise HTTPException(status_code=409,
@@ -525,6 +575,12 @@ def resume_path(learner_id: int) -> str:
         SELECT m.slug, e.last_ordinal, e.furthest_ordinal
         FROM enrolment e JOIN module m ON m.id = e.module_id
         WHERE e.learner_id = %s AND e.completed_at IS NULL AND m.published
+          -- And not one they have already passed. Sending somebody back to
+          -- slide twelve of a course they finished last month is the portal
+          -- telling them it has not noticed.
+          AND NOT EXISTS (SELECT 1 FROM certificate c
+                           WHERE c.learner_id = e.learner_id
+                             AND c.module_id = e.module_id)
         ORDER BY e.last_seen_at DESC NULLS LAST, e.started_at DESC LIMIT 1
         """, (learner_id,))
     if not open_module:

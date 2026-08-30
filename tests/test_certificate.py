@@ -202,11 +202,23 @@ def test_the_printed_name_is_frozen_at_issue(person):
     assert "Krishnendu De" in _text_of(again.content)
 
 
-def test_a_retake_earns_its_own_certificate(person):
-    first = sit(person, 10)
-    second = sit(person, 9)
-    assert second["certificate"]["serial"] != first["certificate"]["serial"]
-    assert second["attempt_no"] == 2
+def test_a_retake_after_failing_earns_its_own_certificate(person):
+    """Failing and coming back is the whole point of a retake."""
+    failed = sit(person, 6)                      # 6/10 = 60%
+    assert failed["certificate"] is None
+    passed = sit(person, 9)
+    assert passed["certificate"]["serial"]
+    assert passed["attempt_no"] == 2
+
+
+def test_there_is_no_retake_after_passing(person):
+    """A second attempt could only repeat the result or contradict it, and the
+    second is worse: a report showing somebody passed and then failed says
+    something about them that the certificate in their inbox denies."""
+    sit(person, 10)
+    refused = person.post("/api/modules/%s/attempts" % SLUG)
+    assert refused.status_code == 409
+    assert "already been passed" in refused.json()["detail"]
 
 
 def test_finishing_twice_does_not_issue_twice(person):
