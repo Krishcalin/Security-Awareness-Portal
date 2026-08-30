@@ -25,7 +25,7 @@ import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote
 from typing import Any, Dict, List, Optional
 
 from fastapi import (BackgroundTasks, Depends, FastAPI, HTTPException,
@@ -33,12 +33,13 @@ from fastapi import (BackgroundTasks, Depends, FastAPI, HTTPException,
 from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
                                Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from server import (auth, certificate, content, db, entra, ingest, mailer,
-                    reporting)
+                    passwords, reporting)
 from server.config import settings
 
 log = logging.getLogger(__name__)
@@ -699,7 +700,15 @@ def report_export(slug: str,
 # Declared before the catch-all below, or the front page would be served for
 # every one of these.
 
-def _set_session(response: Response, entra_oid: str) -> None:
+#: Carries who is changing their password, for somebody who has proved a
+#: password but has not been given a session yet because that password was
+#: issued to them by somebody else. Fifteen minutes: it exists to cross one
+#: page.
+PASSWORD_COOKIE = "awareness_password_change"
+PASSWORD_COOKIE_MAX_AGE = 15 * 60
+
+
+def _write_session(response: Response, token: str) -> None:
     """One place that decides how the session cookie is written.
 
     HttpOnly so script cannot read it, SameSite=Lax so it is not sent on a
@@ -707,13 +716,74 @@ def _set_session(response: Response, entra_oid: str) -> None:
     and Secure unless it has been explicitly switched off for local http.
     """
     response.set_cookie(
-        auth.COOKIE_NAME, auth.issue(entra_oid),
+        auth.COOKIE_NAME, token,
         max_age=auth.MAX_AGE_SECONDS, httponly=True, samesite="lax",
         secure=settings.cookie_secure, path="/")
 
 
+def _set_session(response: Response, entra_oid: str, epoch: int = 0) -> None:
+    """A session for a directory identity."""
+    _write_session(response, auth.issue(entra_oid, epoch))
+
+
+def _set_local_session(response: Response, learner: Dict[str, Any]) -> None:
+    """A session for an account that signed in with a password."""
+    _write_session(response,
+                   auth.issue_local(learner["id"], learner["session_epoch"]))
+
+
+#: The sign-in form is four short fields. Anything approaching this is not
+#: one, and reading it into memory first would be doing an anonymous caller a
+#: favour.
+MOST_FORM_BYTES = 8 * 1024
+
+
+async def _form_fields(request: Request) -> Dict[str, str]:
+    """The fields of an ordinary HTML form post.
+
+    `request.form()` would do this, and would pull in python-multipart to do
+    it — a dependency for parsing `a=1&b=2`, on a server whose whole reason for
+    existing is to be installable inside an organisation that will look at
+    what it installs. These are the only forms this application has, they have
+    no file upload, and urlencoded is what a browser sends for them.
+    """
+    if not request.headers.get("content-type", "").split(";")[0].strip() \
+            == "application/x-www-form-urlencoded":
+        return {}
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MOST_FORM_BYTES:
+        return {}
+    body = await request.body()
+    if len(body) > MOST_FORM_BYTES:
+        return {}
+    try:
+        decoded = body.decode("utf-8")
+    except UnicodeDecodeError:
+        return {}
+    # Last one wins, which is also what a form library does. A password field
+    # sent twice is a client doing something odd, not a way past anything.
+    return dict(parse_qsl(decoded, keep_blank_values=True))
+
+
+def _form_token(purpose: str) -> str:
+    """A signed statement that this form came from this server.
+
+    Without one, a page on another site can post the sign-in form and put
+    somebody into an account that is not theirs. That is not a way in for the
+    attacker, which is why it gets forgotten — it is a way to have somebody
+    else's training, and the certificate at the end of it, recorded against an
+    account the attacker holds.
+    """
+    return auth.sign({"form": purpose})
+
+
+def _form_token_ok(token: str, purpose: str) -> bool:
+    claims = auth.verify(token, auth.FORM_MAX_AGE_SECONDS)
+    return bool(claims and claims.get("form") == purpose)
+
+
 def _sign_in_page(problem: str = "", status: int = 200,
-                  next_path: str = "/") -> HTMLResponse:
+                  next_path: str = "/", email: str = "") -> HTMLResponse:
     """The sign-in screen, with an optional sentence about what went wrong.
 
     Rendered through the template rather than assembled here: `problem` can
@@ -729,6 +799,10 @@ def _sign_in_page(problem: str = "", status: int = 200,
             problem=problem,
             configured=entra.configured(),
             minutes=_course_minutes(),
+            # Put back so a mistyped password does not also mean retyping the
+            # address. Autoescaped, like everything else on this page.
+            email=email,
+            form_token=_form_token("signin"),
             next_query=query)))
 
 
@@ -803,10 +877,169 @@ def sign_in_callback(request: Request) -> Response:
     if target == "/":
         target = resume_path(learner["id"])
     response = RedirectResponse(target, status_code=303)
-    _set_session(response, identity["oid"])
+    _set_session(response, identity["oid"], learner["session_epoch"])
     response.delete_cookie(entra.FLOW_COOKIE, path="/auth")
     return response
 
+
+# ── signing in with a password ─────────────────────────────────────────────
+#
+# The second way in, for the people the directory does not reach. Everything
+# that makes it survivable is in `auth.password_sign_in` — one answer for a
+# wrong password and for an unknown address, the same work done either way so
+# the two cannot be told apart with a stopwatch, and a lockout after ten
+# consecutive failures.
+
+@app.post("/auth/password", include_in_schema=False)
+async def password_sign_in(request: Request, next: str = "/") -> Response:
+    fields = await _form_fields(request)
+    email = fields.get("email", "")
+    password = fields.get("password", "")
+
+    target = entra.safe_next(next)
+    if not _form_token_ok(fields.get("form_token", ""), "signin"):
+        return _sign_in_page(
+            "This form did not come from here, or it has been open too long. "
+            "Please try again.", 400, next_path=target, email=email)
+
+    try:
+        # scrypt is deliberately slow and this handler is on the event loop.
+        # Off it, or one person signing in stops every other request for a
+        # sixth of a second.
+        learner = await run_in_threadpool(auth.password_sign_in, email,
+                                          password)
+    except auth.Refused as refused:
+        # Recorded, because ten of these in a row is the thing somebody needs
+        # to be able to look up afterwards. Only when it looks like an address:
+        # a password typed into the email box by mistake should not be the one
+        # thing about this attempt that gets written down.
+        log.info("password sign-in refused for %s",
+                 email if "@" in email else "(not an address)")
+        return _sign_in_page(str(refused), 401, next_path=target, email=email)
+
+    if learner["password_must_change"]:
+        # No session yet. They have proved a password somebody else chose,
+        # which is enough to be allowed to choose their own and nothing else.
+        response = RedirectResponse("/auth/password/change", status_code=303)
+        response.set_cookie(
+            PASSWORD_COOKIE,
+            auth.sign({"chg": learner["id"], "ep": learner["session_epoch"]}),
+            max_age=PASSWORD_COOKIE_MAX_AGE, httponly=True, samesite="lax",
+            secure=settings.cookie_secure, path="/auth")
+        return response
+
+    if target == "/":
+        target = resume_path(learner["id"])
+    response = RedirectResponse(target, status_code=303)
+    _set_local_session(response, learner)
+    return response
+
+
+# ── choosing a password ────────────────────────────────────────────────────
+
+def _who_is_changing(request: Request):
+    """(learner, how they got here), for the change-password page.
+
+    Two ways to be here and they are not the same. Somebody signed in is
+    changing a password they already chose. Somebody holding the ticket issued
+    a moment ago has proved a password an administrator gave them and has no
+    session at all — which is the point: a password somebody else knows is
+    good for reaching this page and nothing else.
+    """
+    claims = auth.read(request.cookies.get(auth.COOKIE_NAME, ""))
+    if claims:
+        learner = auth.learner_for(claims)
+        if learner:
+            return learner, ("oid" if claims.get("oid") else "lid")
+
+    ticket = auth.verify(request.cookies.get(PASSWORD_COOKIE, ""),
+                         PASSWORD_COOKIE_MAX_AGE)
+    if ticket and ticket.get("chg"):
+        learner = auth.learner_for({"lid": ticket["chg"],
+                                    "ep": ticket.get("ep", 0)})
+        if learner:
+            return learner, "ticket"
+    return None, ""
+
+
+def _password_page(learner: Dict[str, Any], problem: str = "",
+                   status: int = 200) -> HTMLResponse:
+    return HTMLResponse(status_code=status, content=(
+        TEMPLATES.get_template("password.html").render(
+            problem=problem,
+            email=learner["email"],
+            forced=bool(learner["password_must_change"]),
+            min_length=passwords.MIN_LENGTH,
+            form_token=_form_token("password"))))
+
+
+@app.get("/auth/password/change", include_in_schema=False)
+def password_change_page(request: Request) -> Response:  # noqa: D401
+    learner, how = _who_is_changing(request)
+    if not learner:
+        return _sign_in_page("Please sign in first.", 401)
+    if not auth.has_password(learner["id"]):
+        return _sign_in_page(
+            "That account signs in with Microsoft and has no password here, "
+            "so there is none to change.", 400)
+    return _password_page(learner)
+
+
+@app.post("/auth/password/change", include_in_schema=False)
+async def password_change(request: Request) -> Response:
+    fields = await _form_fields(request)
+    current = fields.get("current", "")
+    fresh = fields.get("fresh", "")
+    again = fields.get("again", "")
+
+    learner, how = _who_is_changing(request)
+    if not learner:
+        return _sign_in_page("Please sign in first.", 401)
+    if not _form_token_ok(fields.get("form_token", ""), "password"):
+        return _password_page(
+            learner, "This form did not come from here, or it has been open "
+            "too long. Please try again.", 400)
+    if not auth.has_password(learner["id"]):
+        return _sign_in_page(
+            "That account signs in with Microsoft and has no password here, "
+            "so there is none to change.", 400)
+
+    # The current password is checked through the same path as a sign-in, so
+    # this form is behind the same lockout. A change form that will take
+    # unlimited guesses is a sign-in form that will, one page further in.
+    try:
+        await run_in_threadpool(auth.password_sign_in, learner["email"],
+                                current)
+    except auth.Refused as refused:
+        return _password_page(learner, str(refused), 401)
+
+    if fresh != again:
+        return _password_page(
+            learner, "The two new passwords are not the same.", 400)
+    if fresh == current:
+        return _password_page(
+            learner, "That is the password you already have. Please choose a "
+            "different one.", 400)
+    try:
+        passwords.check_suitable(fresh, learner["email"])
+    except passwords.Unsuitable as unsuitable:
+        return _password_page(learner, str(unsuitable), 400)
+
+    await run_in_threadpool(auth.set_password, learner["id"], fresh, False)
+
+    # `set_password` ends every session held under the old password, this one
+    # included. Issue a new one of the same kind, or changing a password would
+    # sign somebody out for having done the right thing.
+    fresh_row = db.one("SELECT %s FROM learner WHERE id = %%s"
+                       % auth.LEARNER_COLUMNS, (learner["id"],))
+    response = RedirectResponse(resume_path(learner["id"]), status_code=303)
+    if how == "oid":
+        _set_session(response, learner["entra_oid"],
+                     fresh_row["session_epoch"])
+    else:
+        _set_local_session(response, fresh_row)
+    response.delete_cookie(PASSWORD_COOKIE, path="/auth")
+    return response
 
 @app.get("/auth/dev", include_in_schema=False)
 def dev_sign_in(token: str = "", next: str = "/") -> Response:
@@ -833,32 +1066,40 @@ def dev_sign_in(token: str = "", next: str = "/") -> Response:
                              "has expired. Mint another with "
                              "`python -m server.devsession --link`.", 400)
     log.warning("development sign-in redeemed for %s", claims["oid"])
+    learner = auth.learner_for(claims)
+    if not learner:
+        return _sign_in_page("That development sign-in link names an account "
+                             "that is no longer here.", 400)
     response = RedirectResponse(entra.safe_next(next) if next != "/"
-                                else resume_path_for_oid(claims["oid"]),
+                                else resume_path(learner["id"]),
                                 status_code=303)
-    _set_session(response, claims["oid"])
+    _set_session(response, claims["oid"], learner["session_epoch"])
     return response
 
 
-def resume_path_for_oid(entra_oid: str) -> str:
-    learner = db.one("SELECT id FROM learner WHERE entra_oid = %s", (entra_oid,))
-    return resume_path(learner["id"]) if learner else "/"
-
 @app.get("/auth/logout", include_in_schema=False)
-def sign_out() -> Response:
-    """Sign out here AND at Microsoft.
+def sign_out(request: Request) -> Response:
+    """Sign out here, and at Microsoft if that is where they signed in.
 
     Clearing only this cookie leaves the Microsoft session intact, so the next
     click on "sign in" silently signs the same person straight back in. On a
     shared machine that is not a sign-out at all, whatever the button said.
+
+    Only for a session that came from Microsoft, though. Sending somebody who
+    signed in with a password to a Microsoft sign-out page ends nothing, and
+    it is an unexpected bounce to a login-looking screen on another domain —
+    which is the exact shape this course teaches people to distrust.
     """
+    claims = auth.read(request.cookies.get(auth.COOKIE_NAME, "")) or {}
     target = "/"
-    if entra.configured():
+    if claims.get("oid") and entra.configured():
         root = settings.entra_redirect_uri.split("/auth/")[0] or "/"
         target = ("%s/oauth2/v2.0/logout?post_logout_redirect_uri=%s"
                   % (entra.authority(), quote(root, safe="")))
     response = RedirectResponse(target, status_code=303)
     response.delete_cookie(auth.COOKIE_NAME, path="/")
+    # In case they got as far as the change-password page and stopped.
+    response.delete_cookie(PASSWORD_COOKIE, path="/auth")
     return response
 
 # ── the app itself ─────────────────────────────────────────

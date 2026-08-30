@@ -16,6 +16,7 @@ vi.mock("../api/client", () => ({
 }))
 
 import { Player } from "./Player"
+import type { Enrolment } from "../api/types"
 
 const NARRATION = "Welcome. Over the next few minutes we will talk about security."
 
@@ -23,7 +24,9 @@ function detail(overrides: Record<string, unknown> = {}) {
   return {
     slug: "essentials", title: "Security Awareness Essentials",
     summary: "", minutes: 32, content_hash: "abc",
-    question_count: 10, question_bank: 100, enrolment: null,
+    question_count: 10, question_bank: 100,
+    // Typed, so a test can describe somebody who is part way through.
+    enrolment: null as Enrolment | null,
     lessons: [{
       ordinal: 1, title: "Security Awareness Training", body: "",
       animation: "none", image: "slides/01-title.png",
@@ -278,6 +281,10 @@ describe("the narration progress bar", () => {
     const { tick } = driveFrames()
     const two = detail({ narration_seconds: 100 })
     two.lessons.push({ ...two.lessons[0], ordinal: 2, title: "Why Security Matters" })
+    // Somebody who has already been as far as slide two, so stepping to it is
+    // not the thing under test here. Earning that step is tested below.
+    two.enrolment = { started_at: null, completed_at: null,
+                      furthest_ordinal: 2 }
     moduleDetail.mockResolvedValue(two)
     renderPlayer()
     await screen.findByText("Security Awareness Training")
@@ -361,5 +368,149 @@ describe("the narration progress bar", () => {
     await screen.findByText("Security Awareness Training")
     expect(screen.queryByRole("progressbar", { name: "Narration progress" }))
       .not.toBeInTheDocument()
+  })
+})
+
+describe("moving between slides", () => {
+  /** A course of `count` recorded slides, with nothing heard yet. */
+  function course(count = 3, overrides: Record<string, unknown> = {}) {
+    const base = detail({ audio_url: "narration/essentials/01.mp3",
+                          narration_seconds: 90, ...overrides })
+    const [first] = base.lessons
+    base.lessons = Array.from({ length: count }, (_, at) => ({
+      ...first, ordinal: at + 1, title: `Slide ${at + 1}`,
+      audio_url: `narration/essentials/0${at + 1}.mp3`,
+    }))
+    return base
+  }
+
+  /** Auto-advance carries the course on by itself when a slide ends, which is
+   *  the whole point of it — and it would hide the button being tested. */
+  async function stopAdvancingAutomatically() {
+    await userEvent.click(screen.getByLabelText("Advance automatically"))
+  }
+
+  const nextSlide = () => screen.getByRole("button", { name: "Next slide" })
+  const previous = () => screen.getByRole("button", { name: "Previous slide" })
+
+  it("will not go on until the slide has been listened to", async () => {
+    moduleDetail.mockResolvedValue(course())
+    renderPlayer()
+    await screen.findByText("Slide 1")
+
+    expect(nextSlide()).toBeDisabled()
+    expect(nextSlide()).toHaveAttribute(
+      "title", "Listen to the end of this slide to continue")
+  })
+
+  it("goes on once the recording has finished", async () => {
+    moduleDetail.mockResolvedValue(course())
+    renderPlayer()
+    await screen.findByText("Slide 1")
+    await stopAdvancingAutomatically()
+
+    fireEvent.ended(document.querySelector("audio")!)
+    expect(nextSlide()).toBeEnabled()
+
+    await userEvent.click(nextSlide())
+    expect(screen.getByText("Slide 2")).toBeInTheDocument()
+  })
+
+  it("refuses the arrow key as well as the button", async () => {
+    // Otherwise the gate is a greyed-out button with a keyboard shortcut
+    // around it, which is not a gate.
+    moduleDetail.mockResolvedValue(course())
+    renderPlayer()
+    await screen.findByText("Slide 1")
+
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    expect(screen.getByText("Slide 1")).toBeInTheDocument()
+  })
+
+  it("always lets somebody go back", async () => {
+    moduleDetail.mockResolvedValue(course())
+    renderPlayer()
+    await screen.findByText("Slide 1")
+    await stopAdvancingAutomatically()
+
+    fireEvent.ended(document.querySelector("audio")!)
+    await userEvent.click(nextSlide())
+    await screen.findByText("Slide 2")
+
+    // Slide 2 has not been heard, so there is no way on. There is always a
+    // way back.
+    expect(nextSlide()).toBeDisabled()
+    expect(previous()).toBeEnabled()
+    await userEvent.click(previous())
+    expect(screen.getByText("Slide 1")).toBeInTheDocument()
+  })
+
+  it("does not ask for a second listen to ground already covered", async () => {
+    // A course that made people sit through everything again to get back to
+    // where they were would teach them to leave it playing to itself.
+    moduleDetail.mockResolvedValue(course())
+    renderPlayer()
+    await screen.findByText("Slide 1")
+    await stopAdvancingAutomatically()
+
+    fireEvent.ended(document.querySelector("audio")!)
+    await userEvent.click(nextSlide())
+    await screen.findByText("Slide 2")
+    await userEvent.click(previous())
+    await screen.findByText("Slide 1")
+
+    expect(nextSlide()).toBeEnabled()
+    await userEvent.click(nextSlide())
+    expect(screen.getByText("Slide 2")).toBeInTheDocument()
+  })
+
+  it("lets somebody back out of a slide they were never sent to", async () => {
+    // A ?slide= link from a colleague, or a bookmark from before any of this
+    // existed, drops somebody past everything they have heard. Forward is
+    // rightly shut. Backward must not be, or both buttons are dead and the
+    // only way out of the course is the browser's own back button.
+    moduleDetail.mockResolvedValue(course())
+    render(
+      <MemoryRouter initialEntries={["/module/essentials?slide=3"]}>
+        <Routes>
+          <Route path="/module/:slug" element={<Player />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await screen.findByText("Slide 3")
+
+    expect(nextSlide()).toBeDisabled()
+    expect(previous()).toBeEnabled()
+    await userEvent.click(previous())
+    expect(screen.getByText("Slide 2")).toBeInTheDocument()
+  })
+
+  it("starts from the progress already recorded", async () => {
+    // Somebody half way through a course they began before any of this
+    // existed must not be made to start again.
+    const half = course()
+    half.enrolment = { started_at: null, completed_at: null,
+                       furthest_ordinal: 3 }
+    moduleDetail.mockResolvedValue(half)
+    renderPlayer()
+    await screen.findByText("Slide 1")
+
+    expect(nextSlide()).toBeEnabled()
+  })
+
+  it("does not lock anybody in on a slide with nothing to hear", async () => {
+    // A gate that can never open is not a gate, it is somebody stuck with no
+    // way on and no way to tell why.
+    const silent = course()
+    silent.lessons[0] = { ...silent.lessons[0], narration: "",
+                          narration_seconds: 0, audio_url: "" }
+    moduleDetail.mockResolvedValue(silent)
+    renderPlayer()
+    await screen.findByText("Slide 1")
+
+    // Unlocking a silent slide happens in an effect, which is a render later
+    // than the one that puts the title on screen. Asserted with waitFor rather
+    // than straight after, or this passes or fails on how busy the machine is.
+    await waitFor(() => expect(nextSlide()).toBeEnabled())
   })
 })

@@ -111,6 +111,18 @@ export function Player() {
   const [muted, setMuted] = useState(false)
   const [autoAdvance, setAutoAdvance] = useState(true)
   const [reachedEnd, setReachedEnd] = useState(false)
+  /**
+   * The furthest slide anybody may move to, as an index.
+   *
+   * Moving FORWARD past it is what listening to a slide buys. Moving back is
+   * never gated: somebody who wants to hear slide four again has already
+   * heard it, and making them sit through everything in between to get back
+   * would teach them to leave the tab playing to itself.
+   *
+   * Seeded from the progress already recorded, so this is not a course that
+   * makes people who are half way through start again.
+   */
+  const [unlocked, setUnlocked] = useState(0)
   const [showTranscript, setShowTranscript] = useState(wantsTranscript)
 
   const narrator = useRef(new Narrator())
@@ -146,6 +158,9 @@ export function Player() {
       const resume = Number.isFinite(asked) && asked > 0
         ? loaded.lessons.findIndex((l) => l.ordinal === asked) : -1
       setIndex(resume >= 0 ? resume : 0)
+      const reached = loaded.lessons.findIndex(
+        (l) => l.ordinal === loaded.enrolment?.furthest_ordinal)
+      setUnlocked(reached >= 0 ? reached : 0)
     }).catch((error) => setProblem(String(error.message)))
   }, [slug, search])
 
@@ -222,6 +237,11 @@ export function Player() {
 
   const followRecording = startFollowing
 
+  /** This slide has been heard: the one after it is now reachable. */
+  const heardToTheEnd = useCallback(() => {
+    setUnlocked((was) => Math.max(was, indexNow.current + 1))
+  }, [])
+
   const stopFollowing = useCallback(() => {
     speaking.current = false
     if (following.current !== null) {
@@ -239,6 +259,16 @@ export function Player() {
       // Nothing to do; the choice simply lasts for this visit.
     }
   }, [showTranscript])
+
+  useEffect(() => {
+    // Nothing to listen to here, so there is nothing to wait for. A gate that
+    // can never open is not a gate, it is somebody stuck on slide nine with
+    // no way on and no way to tell why.
+    if (lesson && (!lesson.narration ||
+                   (status === "unsupported" && !lesson.audio_url))) {
+      setUnlocked((was) => Math.max(was, index + 1))
+    }
+  }, [lesson, index, status])
 
   useEffect(() => {
     if (lesson) void api.recordProgress(slug, lesson.ordinal).catch(() => {
@@ -296,13 +326,15 @@ export function Player() {
       onEnd: () => {
         speaking.current = false
         setHeard((was) => ({ ...was, fraction: 1, seconds: was.total }))
+        heardToTheEnd()
         if (!autoAdvanceNow.current) return
         const next = indexNow.current + 1
         if (next <= lastIndex) goTo(next)
         else setReachedEnd(true)
       },
     })
-  }, [detail, goTo, lastIndex, followRecording, startFollowing])
+  }, [detail, goTo, heardToTheEnd, lastIndex, followRecording,
+      startFollowing])
 
   const playing = status === "speaking"
 
@@ -333,10 +365,13 @@ export function Player() {
   const step = useCallback((delta: number) => {
     const next = Math.min(Math.max(index + delta, 0), lastIndex)
     if (next === index) return
+    // Forwards is what has to be earned. Checked here rather than only on the
+    // button, so the arrow keys obey the same rule.
+    if (delta > 0 && next > unlocked) return
     const wasPlaying = playing
     goTo(next)
     if (wasPlaying) window.setTimeout(() => speakLesson(next), 60)
-  }, [goTo, index, lastIndex, playing, speakLesson])
+  }, [goTo, index, lastIndex, playing, speakLesson, unlocked])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -361,6 +396,7 @@ export function Player() {
   // this slide says anything, so they are not optional here.
   const nothingToHear = status === "unsupported" && !lesson.audio_url
   const atEnd = index === lastIndex
+  const mayGoOn = index + 1 <= unlocked
   const progress = ((index + 1) / detail.lessons.length) * 100
 
   return (
@@ -415,6 +451,7 @@ export function Player() {
             setStatus("idle")
             setSpokenAt(-1)
             setHeard((was) => ({ ...was, fraction: 1, seconds: was.total }))
+            heardToTheEnd()
             if (!autoAdvanceNow.current) return
             if (index < lastIndex) goTo(index + 1)
             else setReachedEnd(true)
@@ -428,6 +465,7 @@ export function Player() {
               onStatus: setStatus,
               onWord: setSpokenAt,
               onEnd: () => {
+                heardToTheEnd()
                 if (!autoAdvanceNow.current) return
                 const next = indexNow.current + 1
                 if (next <= lastIndex) goTo(next)
@@ -488,9 +526,14 @@ export function Player() {
         <button
           type="button"
           onClick={() => step(1)}
-          disabled={atEnd}
+          disabled={atEnd || !mayGoOn}
           className="rounded-lg border border-line px-3 py-2 disabled:opacity-40"
           aria-label="Next slide"
+          // Why it is greyed out, for anybody who would otherwise think the
+          // page had stopped working.
+          title={atEnd ? "The last slide"
+                 : mayGoOn ? "Next slide"
+                 : "Listen to the end of this slide to continue"}
         >
           <ChevronRight size={18} />
         </button>

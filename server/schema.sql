@@ -322,3 +322,62 @@ ALTER TABLE learner ADD CONSTRAINT learner_role_known
 
 CREATE INDEX IF NOT EXISTS learner_role_idx ON learner (role)
     WHERE role <> 'learner';
+
+-- ── a password, for the people the directory does not reach ────────────────
+--
+-- Entra remains the way in for anybody who has a work account: it is the
+-- stronger of the two, it carries the organisation's own MFA and conditional
+-- access, and there is no password here to phish. This exists for the people
+-- that leaves out, which in a utility is not a small group — contractors,
+-- shift staff on shared OT terminals, and site engineers who have a payroll
+-- number and no mailbox.
+--
+-- `entra_oid` stays nullable and `email` remains the unique key, so a local
+-- account is a learner row with a password and no directory identity. If the
+-- same person later gets an Entra account, matching still happens on
+-- `entra_oid` — see auth.upsert_learner — and the two are deliberately NOT
+-- merged on email: silently joining a directory identity to a local password
+-- account would let anybody who could create an address in the tenant take
+-- over the record of somebody who already holds a certificate.
+ALTER TABLE learner ADD COLUMN IF NOT EXISTS
+    password_hash text NOT NULL DEFAULT '';
+
+ALTER TABLE learner ADD COLUMN IF NOT EXISTS
+    password_set_at timestamptz;
+
+-- Set when an administrator provisions or resets the password, cleared when
+-- the learner chooses their own. Until it is cleared the session can reach
+-- nothing but the change-password page.
+--
+-- This is not ceremony. The certificate says a named person completed the
+-- training; if whoever ran the provisioning command still knows the password,
+-- it says that person or the administrator did, and the difference is the
+-- whole evidentiary value of the thing.
+ALTER TABLE learner ADD COLUMN IF NOT EXISTS
+    password_must_change boolean NOT NULL DEFAULT false;
+
+-- Failed attempts in a row, and the lockout that follows. Both cleared by a
+-- successful sign-in.
+ALTER TABLE learner ADD COLUMN IF NOT EXISTS
+    failed_signins integer NOT NULL DEFAULT 0;
+
+ALTER TABLE learner ADD COLUMN IF NOT EXISTS
+    locked_until timestamptz;
+
+-- The email address is the username, and it is matched case-insensitively:
+-- somebody typing Firstname.Lastname@ on a phone that capitalises the first
+-- letter is the same person. Postgres will not use the plain index for
+-- lower(email), so it gets its own.
+CREATE UNIQUE INDEX IF NOT EXISTS learner_email_lower_idx
+    ON learner (lower(email));
+
+-- Bumped to invalidate every session this learner holds.
+--
+-- The session cookie is a signed statement rather than a row, which is what
+-- makes it cheap and what makes it unrevokable on its own: removing somebody's
+-- password does nothing about the cookie already in their browser, and it
+-- stays good for the rest of its ten hours. The epoch is carried in the cookie
+-- and compared on every request, so "this account is closed" can be made true
+-- immediately rather than eventually.
+ALTER TABLE learner ADD COLUMN IF NOT EXISTS
+    session_epoch integer NOT NULL DEFAULT 0;

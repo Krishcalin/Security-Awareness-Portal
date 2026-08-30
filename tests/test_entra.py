@@ -102,11 +102,15 @@ def test_a_path_inside_the_site_is_kept(candidate):
 
 def test_the_sign_in_page_says_so_when_entra_is_not_configured(clean):
     """The page renders either way — it is the one screen somebody who cannot
-    get in is looking at, so it has to explain rather than 500 at them."""
+    get in is looking at, so it has to explain rather than 500 at them.
+
+    The password form is still offered, because it still works. What is not
+    offered is a Microsoft button that would answer 503."""
     page = clean.get("/auth/login", follow_redirects=False)
     assert page.status_code == 200
-    assert "ENTRA_" in page.text
+    assert "not configured" in page.text
     assert "Sign in with Microsoft" not in page.text
+    assert 'name="password"' in page.text
 
     # And the thing that would actually go to Microsoft refuses.
     start = clean.get("/auth/start", follow_redirects=False)
@@ -251,7 +255,16 @@ def test_signing_out_clears_the_session(clean):
 def test_signing_out_also_signs_out_at_microsoft(clean, entra_configured):
     """Clearing only the local cookie leaves the Microsoft session, so the
     next click on 'sign in' silently signs the same person back in. On a
-    shared machine that is not a sign-out at all."""
+    shared machine that is not a sign-out at all.
+
+    For a session that CAME from Microsoft. Somebody who signed in with a
+    password has no Microsoft session to end, and bouncing them to one is an
+    unexpected trip to a login-looking page on another domain."""
+    from server import auth
+    oid = "signed-in-with-microsoft"
+    auth.upsert_learner(entra_oid=oid, email="d.person@example.com")
+    clean.cookies.set(auth.COOKIE_NAME, auth.issue(oid))
+
     response = clean.get("/auth/logout", follow_redirects=False)
     location = response.headers["location"]
     assert location.startswith("https://login.microsoftonline.com/%s" % TENANT)

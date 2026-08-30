@@ -12,9 +12,10 @@ grid blackouts, Colonial Pipeline, Norsk Hydro, Stuxnet, AIIMS Delhi — because
 the examples are the part people remember.
 
 At the end, **ten questions drawn from a bank of 100**. Sign-in is through
-Microsoft Entra ID. Pass at 70% and a certificate is issued in your name and
-emailed from the CISO's office. Leave halfway through and you come back to the
-slide you left.
+Microsoft Entra ID, or with a password for the people the directory does not
+cover. Pass at 70% and a certificate is issued in your name and emailed from
+the CISO's office. Leave halfway through and you come back to the slide you
+left.
 
 ---
 
@@ -100,8 +101,8 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 214, needs the database from docker compose
-cd frontend && npm test         # 113
+python -m pytest                # 256, needs the database from docker compose
+cd frontend && npm test         # 121
 ```
 
 ---
@@ -211,6 +212,23 @@ the element without the page being asked, so the loop that drives the bar
 cannot only be started where the play button is handled — it also starts on the
 element's own `play`, and releases its frame handle whenever it stops, or it
 could never be started a second time.
+
+**Moving on is earned; moving back is not.** The forward arrow is disabled
+until the slide's narration reaches the end, so the course cannot be clicked
+through in thirty seconds. Backwards is never gated, and neither is going
+forward again over ground already covered — somebody who has heard six slides
+can step back to the third and return to the sixth without listening again.
+Only crossing their own frontier costs anything. A course that made people sit
+through everything twice to get back to where they were would teach them to
+leave it playing to itself, which is the behaviour the gate exists to prevent.
+
+The check lives in the step function rather than on the button, so the arrow
+keys obey it too; a greyed-out button with a working keyboard shortcut beside
+it is not a gate. A slide with nothing to hear unlocks immediately, and going
+back is always allowed even from a slide somebody was never sent to — a
+`?slide=` link from a colleague lands past everything they have heard, and if
+both directions were shut the only way out would be the browser's own back
+button.
 
 **The transcript is off by default.** The course is meant to be listened to,
 and a wall of text beside the voice invites people to read ahead instead of
@@ -371,6 +389,117 @@ given, which cannot be given again in the same attempt.
 
 ---
 
+## Signing in
+
+Two ways, and the page offers them in that order: the password form first,
+because it is the one that needs the keyboard, then Microsoft under a rule
+that says "or".
+
+**Entra is the better one and the page says so.** It carries the
+organisation's own MFA and conditional access, and there is no password here
+to phish. The Microsoft button appears only when `ENTRA_*` is configured —
+a button that answers 503 is worse than no button.
+
+**The password is for the people the directory does not reach**, which in a
+utility is not a small group: contractors, shift staff on shared OT terminals,
+site engineers with a payroll number and no mailbox. It is a real second
+factor of *coverage*, not a convenience — without it those people cannot be
+trained, and the training record has a hole in exactly the population that
+works closest to the plant.
+
+### How an account comes to exist
+
+From the shell, like `server.grant`, and for the same reason. There is no
+sign-up page: an account here is a claim that a named person exists and is
+required to do the training, and an endpoint that lets anybody create one is
+an endpoint that lets anybody manufacture a completion record with a plausible
+name on it.
+
+```bash
+docker compose exec app python -m server.account --create \
+    --email j.rao@contractor.example --first Jaya --last Rao \
+    --department "Unit 3 O&M"
+docker compose exec app python -m server.account --list
+docker compose exec app python -m server.account --reset   --email …
+docker compose exec app python -m server.account --unlock  --email …
+docker compose exec app python -m server.account --disable --email …
+```
+
+The password is **generated and printed once**, never taken as an argument: a
+password typed on a command line is in the shell history, in `ps`, and in
+whatever collects the terminal's scrollback. It is four words, because it has
+to survive being read down a phone line and typed on a phone keyboard.
+
+**Whoever runs that command cannot afterwards sign in as that person.** The
+account is created needing a password change, and an issued password buys
+exactly one page: the change-password form, with no session behind it. The
+certificate names a person; if the administrator still knew the password it
+would name that person *or* an administrator, and the difference is the whole
+evidentiary value of the document.
+
+`--disable` removes the password and keeps the training record, which outlives
+the account. It also ends every session that account holds — see below.
+
+### What is stored, and what is refused
+
+**scrypt from the standard library.** Not because it beats argon2id — it does
+not — but because it is memory-hard, it is in `hashlib`, and it needs no
+dependency for a portal whose only other cryptography is an HMAC. A password
+file is kept for years; a hashing choice that depends on a wheel building on
+whatever Python the deployment lands on is one that gets quietly swapped for
+something worse. Cost parameters live **inside each hash**, so raising them
+later keeps every existing password verifiable and re-derives each one the
+next time its owner signs in.
+
+**No composition rules.** No "must contain a number and a symbol" — those were
+withdrawn from NIST 800-63B because they produce `Password1!`, which is
+predictable to a cracker and hard for a person. The rules are twelve
+characters, not one of the obvious ones, and not the user's own email address.
+
+### What the form refuses to give away
+
+**One answer for a wrong password and for an address with no account**, and
+the same work done either way: an unknown address burns the time a real check
+would have taken, because "no such address" answering in a millisecond while
+"wrong password" takes a sixth of a second is a list of who works here,
+readable with a stopwatch.
+
+**Ten consecutive failures lock the account for fifteen minutes**, and the
+correct password does not walk through the lock — a lockout the right password
+passes is a message telling an attacker which guess was right. Per account
+rather than per address seen, which is the trade worth naming: it does nothing
+against one common password sprayed across a thousand addresses, and
+everything against the attack that actually gets in — one address, a word
+list, all night. It also means the lockout message only ever reaches somebody
+who has already failed ten times against that one account, so it is not a way
+to ask whether an address exists.
+
+**The form is signed.** Without a token, a page on another site can post the
+sign-in form and put somebody into an account that is not theirs — not a way
+in for the attacker, which is why it gets forgotten, but a way to have
+somebody else's training and the certificate at the end of it recorded against
+an account the attacker holds.
+
+**Sessions can be ended.** The cookie is a signed statement rather than a row,
+which is what makes it cheap and what makes it unrevokable on its own:
+removing a password does nothing about the cookie already in the browser, and
+it stays good for the rest of its ten hours. Each learner carries a
+`session_epoch` that the cookie repeats and every request compares, so
+`--disable` and `--reset` make "this account is closed" true immediately
+rather than eventually.
+
+**Signing out knows which session it is ending.** Only a session that came
+from Microsoft is sent to Microsoft's sign-out. Bouncing somebody who used a
+password to a Microsoft page ends nothing, and it is an unexpected trip to a
+login-looking screen on another domain — the exact shape this course spends
+twenty minutes teaching people to distrust.
+
+**There is no emailed reset link**, deliberately, for the same reason. A
+forgotten password is reissued by the security team.
+
+
+---
+
 ## The sign-in page and the brand
 
 `/auth/login` is a server-rendered page rather than a route in the app,
@@ -520,6 +649,16 @@ and must not also be the key to the PDF.
 **The report never reduces to one number.** Not a stylistic preference: the
 single figure is what makes awareness training worthless as evidence, and it is
 asserted by tests rather than left to whoever edits the screen next.
+
+**A local session is not a directory session.** The cookie names an identity
+with one claim — `oid` for Entra, `lid` for a local account — and the two are
+looked up separately and never interchangeably. Resolving either through the
+other would mean creating an address in the tenant was a way to reach the
+record of somebody who signs in with a password, including a certificate
+already issued in their name. For the same reason, `--create` refuses to
+attach a password to an existing directory account: `--add-password` exists so
+that giving somebody a second way into their own training record is always
+something a person typed on purpose.
 
 **Sign-in is scoped to your tenant.** The authority is the tenant id, never
 `common`, and the `tid` claim is checked as well. People are matched on the

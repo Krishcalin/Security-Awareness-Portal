@@ -128,3 +128,28 @@ def test_the_grant_command_the_readme_names_exists():
     from server import grant
     assert "server.grant --email" in README
     assert "admin" in grant.ROLES
+
+
+def test_every_account_flag_the_readme_names_is_a_real_one():
+    """Six flags somebody copies out of here at the moment they are least able
+    to work out why one of them does not exist."""
+    import inspect
+
+    from server import account
+    declared = inspect.getsource(account.main)
+    for flag in ("--create", "--add-password", "--reset", "--unlock",
+                 "--disable", "--list"):
+        assert flag in README, "the README does not mention %s" % flag
+        assert '"%s"' % flag in declared, "%s is not a flag it accepts" % flag
+
+
+def test_the_password_rules_in_the_readme_are_the_ones_in_the_code():
+    """Three numbers somebody will be told over the phone by a security team
+    reading this page."""
+    from server import auth, passwords
+    assert "Ten consecutive failures" in README
+    assert auth.LOCKOUT_AFTER == 10
+    assert "fifteen minutes" in README
+    assert auth.LOCKOUT_MINUTES == 15
+    assert "twelve" in README
+    assert passwords.MIN_LENGTH == 12

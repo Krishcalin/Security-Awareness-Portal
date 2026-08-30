@@ -52,7 +52,7 @@ def main(argv=None) -> int:
         entra_oid=oid, email=args.email, upn=args.email,
         display_name=args.name or args.email.split("@")[0],
         department=args.department, given_name=first, family_name=last)
-    token = auth.issue(oid)
+    token = auth.issue(oid, learner["session_epoch"])
 
     print("learner #%s  %s  (certificate: %r)"
           % (learner["id"], learner["email"],
