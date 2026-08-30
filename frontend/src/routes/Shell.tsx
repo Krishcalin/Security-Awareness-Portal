@@ -33,7 +33,19 @@ export function Shell() {
 
   return (
     <div className="min-h-full flex flex-col">
-      <header className="border-b border-line bg-surface">
+      {/* Stays put while the page scrolls under it.
+       *
+       * `sticky` rather than `fixed`, so the header keeps taking up its own
+       * row and nothing has to be padded down by exactly its height — a
+       * number that would then be wrong the first time somebody changed the
+       * padding here. `bg-surface` is opaque, which it has to be now that
+       * content passes behind it.
+       *
+       * This works because nothing between here and the viewport scrolls: an
+       * ancestor with `overflow` of its own would become the scroll container
+       * and the header would stick to the top of THAT, which is to say it
+       * would not appear to stick at all. */}
+      <header className="sticky top-0 z-40 border-b border-line bg-surface">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3">
           {/* The shield alone, not the full lockup. The lockup's navy
               wordmark and grey strapline are drawn for a light ground and all
