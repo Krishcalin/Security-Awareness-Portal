@@ -1,0 +1,11 @@
+[project]
+name = "security-awareness-portal"
+version = "0.1.0"
+description = "Security awareness training that measures learning rather than completion"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+# The tests import `tools` and `server` as packages from the repository root.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

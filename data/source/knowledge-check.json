@@ -1,0 +1,190 @@
+{
+  "_about": [
+    "The knowledge check for Security Awareness Essentials.",
+    "",
+    "AUTHORED SEPARATELY FROM THE TEACHING MATERIAL, on purpose: the answers do",
+    "not belong in the same diff as the slides, so a content review of one is not",
+    "a spoiler for the other.",
+    "",
+    "EVERY QUESTION HERE IS MEANT TO DISCRIMINATE. A question that everybody",
+    "answers correctly on the first attempt measures nothing — it cannot tell a",
+    "person who understands from one who does not, so a high score on it is not",
+    "evidence of awareness. `question_stat` in the schema reports the correct rate",
+    "per question precisely so a question that has stopped discriminating can be",
+    "found and replaced.",
+    "",
+    "So these deliberately sit where the material contradicts intuition — powering",
+    "a ransomed machine off, the padlock meaning encrypted rather than honest,",
+    "denying an MFA prompt rather than approving it to stop the buzzing. Each",
+    "distractor is something a reasonable person actually does.",
+    "",
+    "`teaches` names the slide the question tests, so a low correct rate points at",
+    "the material that failed rather than at the people who answered.",
+    "",
+    "ANSWER POSITIONS ARE BALANCED AND IRREGULAR: three correct answers in each",
+    "of the four positions, in no discernible order. A quiz whose answer is never",
+    "the last option, or whose answers cycle, can be scored without reading it.",
+    "`tools/build_content.py` refuses to build if a position goes unused, if one",
+    "position holds more than half the answers, or if every wrong option opens",
+    "with the same words and the correct one does not — that last shape lets a",
+    "learner pick the odd one out without knowing the material."
+  ],
+  "questions": [
+    {
+      "ordinal": 1,
+      "teaches": 11,
+      "prompt": "You open an attachment and files on your screen start renaming themselves with a strange extension. What do you do first?",
+      "options": [
+        "Shut the machine down immediately to stop the encryption",
+        "Disconnect from the network but leave the machine running",
+        "Run a full antivirus scan before telling anyone",
+        "Close the application and see whether it stops on its own"
+      ],
+      "correct_index": 1,
+      "explains": "Disconnect, but do not power off. Pulling the network cable and switching off Wi-Fi limits how far the encryption spreads to shared drives. Shutting down feels decisive and destroys evidence that lives only in memory — evidence the response team needs. Disconnect, then report."
+    },
+    {
+      "ordinal": 2,
+      "teaches": 7,
+      "prompt": "A site shows a padlock and starts with https. What does that actually tell you?",
+      "options": [
+        "The site is safe to enter payment details into",
+        "The certificate authority has checked the company behind it",
+        "The site has been verified as legitimate",
+        "The connection is encrypted, and nothing about the site's honesty"
+      ],
+      "correct_index": 3,
+      "explains": "The padlock means the connection is encrypted between you and that server. It says nothing about who owns the server or what they intend. Criminals obtain certificates as easily as anyone else, so a phishing site is very often served over https. Read the domain name, not the padlock."
+    },
+    {
+      "ordinal": 3,
+      "teaches": 6,
+      "prompt": "Your phone buzzes with an MFA approval request you did not trigger. It buzzes again. And again. What do you do?",
+      "options": [
+        "Deny it and report it — someone already has your password",
+        "Turn the phone to silent and deal with it later",
+        "Approve it once so the notifications stop, then change your password",
+        "Ignore the prompts and carry on"
+      ],
+      "correct_index": 0,
+      "explains": "An unexpected prompt means somebody is already using your password — that is the only way it can be generated. Approving to stop the buzzing is exactly what the attacker is waiting for, and it is called MFA fatigue for a reason. Deny, then report so the password can be reset."
+    },
+    {
+      "ordinal": 4,
+      "teaches": 5,
+      "prompt": "Which of these is the strongest password?",
+      "options": [
+        "TrustNo1!",
+        "P@ssw0rd!23",
+        "correct-battery-staple-harbour",
+        "Xk7$mQ2p"
+      ],
+      "correct_index": 2,
+      "explains": "Length beats complexity. A long passphrase of unrelated words is far harder to crack than a short string stuffed with symbols, and much easier to remember. Aim for twelve to sixteen characters or more. The other three are short, and two follow patterns that cracking tools try first."
+    },
+    {
+      "ordinal": 5,
+      "teaches": 9,
+      "prompt": "Your phone shows an incoming call from your bank's real, published number. The caller knows your address and the last transaction on your account. What does that establish?",
+      "options": [
+        "It is genuine — a caller cannot fake the number on your screen",
+        "It is genuine — only the bank would know those details",
+        "Probably a scam, because a real bank never telephones a customer",
+        "Nothing. Caller ID can be spoofed and details can be bought or breached"
+      ],
+      "correct_index": 3,
+      "explains": "Caller ID proves nothing — spoofing a number is trivial. Knowing a few real details proves nothing either; those come from breaches, social media or an earlier call. The defence is always the same: hang up and call back on a number you already trust. A genuine request survives that."
+    },
+    {
+      "ordinal": 6,
+      "teaches": 12,
+      "prompt": "You badge through a secure door. Someone carrying two coffees and a laptop follows close behind, smiling. What is the right thing to do?",
+      "options": [
+        "Let the door close, then hold it open once they show you a badge",
+        "Let the door close and ask them to badge in",
+        "Hold the door — refusing would be rude and they clearly work here",
+        "Hold the door, then mention it to security afterwards"
+      ],
+      "correct_index": 1,
+      "explains": "Tailgating works precisely because stopping it feels rude, and full hands are a standard pretext. Holding the door is not politeness, it is an access-control bypass — the control only works if it is applied to everyone. Let it close and ask them to badge in."
+    },
+    {
+      "ordinal": 7,
+      "teaches": 16,
+      "prompt": "What causes the most data breaches in practice?",
+      "options": [
+        "Malware delivered through software vulnerabilities",
+        "Attackers breaking through technical defences",
+        "Confidential information sent to the wrong recipient",
+        "Stolen or lost laptops"
+      ],
+      "correct_index": 2,
+      "explains": "The most common breach is not a hack. It is confidential information going to the wrong person — a mistyped address, a reply-all, a link shared more widely than intended. That is why knowing the classification of what you are handling matters before you send, share or store it."
+    },
+    {
+      "ordinal": 8,
+      "teaches": 10,
+      "prompt": "Your organisation has complete, tested, offline backups. Why might ransomware still be a serious problem?",
+      "options": [
+        "Attackers usually copy the data out before encrypting it, and threaten to publish",
+        "Backups are usually encrypted by the ransomware as well",
+        "Paying is still required to obtain the decryption key",
+        "Restoring from backup is slow but otherwise the risk is handled"
+      ],
+      "correct_index": 0,
+      "explains": "This is double extortion. Modern ransomware crews steal the data before they lock anything, so even a perfect restore leaves the second threat intact: pay, or we publish what we took. Backups solve availability. They do nothing about disclosure."
+    },
+    {
+      "ordinal": 9,
+      "teaches": 15,
+      "prompt": "You find an unlabelled USB drive in the car park. What is the correct action?",
+      "options": [
+        "Hand it to the security team without plugging it in anywhere",
+        "Leave it where it is in case the owner comes back",
+        "Plug it into an isolated machine to find the owner",
+        "Scan it with antivirus first, then open it to look for a name"
+      ],
+      "correct_index": 0,
+      "explains": "Dropped drives are a real technique that relies on exactly this curiosity. Some carry malware; others imitate a keyboard and type commands the moment they are connected, which no antivirus scan will catch because nothing is ever read as a file. Do not test it. Hand it in."
+    },
+    {
+      "ordinal": 10,
+      "teaches": 17,
+      "prompt": "You clicked a link in a suspicious email an hour ago and nothing seems to have happened. What now?",
+      "options": [
+        "Run a virus scan and report it only if the scan finds something",
+        "Change your password quietly and move on",
+        "Report it now, even though you are not sure anything went wrong",
+        "Watch for unusual behaviour and report it only if something appears"
+      ],
+      "correct_index": 2,
+      "explains": "Uncertainty is exactly when to report — you do not need to be sure, and waiting for symptoms wastes the window where the damage can still be limited. Nobody is penalised for raising the alarm, and reporting fast is what turns a potential crisis into a routine event."
+    },
+    {
+      "ordinal": 11,
+      "teaches": 14,
+      "prompt": "You are in an airport and see two networks: \"Airport_WiFi\" and \"Airport WiFi Free\". Which is safe to join?",
+      "options": [
+        "Either, as long as you only browse and do not log in anywhere",
+        "Whichever has the stronger signal",
+        "The one requiring a password, since open networks are the risk",
+        "Neither, until you confirm the exact name with airport staff"
+      ],
+      "correct_index": 3,
+      "explains": "A fake hotspot named to look official is a standard trick, and a password on it proves nothing — the attacker chose the password. Verify the exact network name with staff, use the VPN, and prefer your own mobile hotspot, which is safer than any network you did not set up."
+    },
+    {
+      "ordinal": 12,
+      "teaches": 18,
+      "prompt": "A colleague shares their login with a new starter whose account has not been set up yet, so the work is not held up. How is this best described?",
+      "options": [
+        "A malicious insider action",
+        "A negligent insider action: knowing the rule and working around it",
+        "Not a security matter, since neither of them intends harm",
+        "Sensible teamwork — the work still needs doing"
+      ],
+      "correct_index": 1,
+      "explains": "Negligent, not malicious — and that distinction matters because most insider risk looks exactly like this. The intent is good and the rule is known; convenience simply wins. The consequence is that two people now act under one identity, and nothing afterwards can tell them apart."
+    }
+  ]
+}
