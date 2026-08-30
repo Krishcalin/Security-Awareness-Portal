@@ -68,3 +68,16 @@ def test_the_narration_failure_modes_are_all_still_handled():
 def test_every_file_the_readme_links_to_exists():
     for link in re.findall(r"\]\(([^)#:]+)\)", README):
         assert (ROOT / link).exists(), link
+
+
+def test_the_pass_mark_in_the_readme_is_the_one_the_server_uses():
+    """A README that says 70% while the server awards at 80% is worse than one
+    that says nothing: somebody reads it and believes it."""
+    from server.config import settings
+    assert "**%d%%**" % round(settings.pass_mark * 100) in README
+
+
+def test_the_ciso_address_matches_the_default():
+    from server.config import settings
+    env = (ROOT / ".env.example").read_text(encoding="utf-8")
+    assert "CERTIFICATE_FROM=%s" % settings.certificate_from in env

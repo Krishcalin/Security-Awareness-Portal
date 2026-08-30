@@ -36,6 +36,32 @@ class Settings:
         self.cookie_secure: bool = os.environ.get(
             "COOKIE_SECURE", "1").lower() not in ("0", "false", "no")
 
+        # The pass mark, as a fraction. Held here rather than in the browser
+        # so there is one answer to "did they pass" — the certificate depends
+        # on it, and a threshold the client can disagree with is a threshold
+        # that will eventually issue a certificate the server did not award.
+        self.pass_mark: float = float(os.environ.get("PASS_MARK", "0.70"))
+
+        # Certificates are sent from the CISO's address. Whether that address
+        # is ALLOWED to be sent from by this server is a question for the
+        # organisation's SPF and DMARC records; see README.
+        self.certificate_from: str = os.environ.get(
+            "CERTIFICATE_FROM", "ciso@mycompanydomain.com")
+        self.certificate_from_name: str = os.environ.get(
+            "CERTIFICATE_FROM_NAME", "Chief Information Security Officer")
+
+        self.smtp_host: str = os.environ.get("SMTP_HOST", "")
+        self.smtp_port: int = int(os.environ.get("SMTP_PORT", "587"))
+        self.smtp_user: str = os.environ.get("SMTP_USER", "")
+        self.smtp_password: str = os.environ.get("SMTP_PASSWORD", "")
+        self.smtp_starttls: bool = os.environ.get(
+            "SMTP_STARTTLS", "1").lower() not in ("0", "false", "no")
+        self.smtp_timeout: int = int(os.environ.get("SMTP_TIMEOUT", "20"))
+
+    @property
+    def mail_configured(self) -> bool:
+        return bool(self.smtp_host and self.certificate_from)
+
     def validate(self) -> None:
         """Refuse to start half-configured.
 

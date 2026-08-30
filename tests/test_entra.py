@@ -253,3 +253,66 @@ def test_signing_out_also_signs_out_at_microsoft(clean, entra_configured):
 def test_signing_out_works_without_entra_configured(clean):
     response = clean.get("/auth/logout", follow_redirects=False)
     assert response.headers["location"] == "/"
+
+
+# ── what signing in captures, and where it puts you ────────────────────────
+
+def test_the_given_and_family_names_are_captured_separately(clean, microsoft):
+    """A certificate needs a first and last name. Entra's `name` claim is a
+    display name and splitting it on a space is how "De, Krishnendu
+    (Security)" ends up printed on somebody's certificate."""
+    from server import db
+    microsoft(good_claims(given_name="Krishnendu", family_name="De",
+                          name="De, Krishnendu (Security)"))
+    clean.cookies.set(entra.FLOW_COOKIE, auth.sign({"state": "st"}))
+    clean.get("/auth/callback?code=abc&state=st", follow_redirects=False)
+
+    learner = db.one("SELECT * FROM learner WHERE entra_oid = %s", (OID,))
+    assert (learner["given_name"], learner["family_name"]) == ("Krishnendu", "De")
+    assert learner["display_name"] == "De, Krishnendu (Security)"
+
+
+def test_a_tenant_that_stops_sending_names_does_not_blank_them(clean, microsoft):
+    from server import db
+    microsoft(good_claims(given_name="Krishnendu", family_name="De"))
+    clean.cookies.set(entra.FLOW_COOKIE, auth.sign({"state": "st"}))
+    clean.get("/auth/callback?code=abc&state=st", follow_redirects=False)
+
+    microsoft(good_claims(given_name="", family_name=""))
+    clean.cookies.set(entra.FLOW_COOKIE, auth.sign({"state": "st"}))
+    clean.get("/auth/callback?code=abc&state=st", follow_redirects=False)
+
+    learner = db.one("SELECT given_name, family_name FROM learner")
+    assert (learner["given_name"], learner["family_name"]) == ("Krishnendu", "De")
+
+
+def test_signing_in_lands_them_where_they_left_off(clean, microsoft):
+    """Somebody who signed out halfway through slide twelve should not have to
+    find their way back to slide twelve."""
+    microsoft(good_claims())
+    clean.cookies.set(entra.FLOW_COOKIE, auth.sign({"state": "st"}))
+    clean.get("/auth/callback?code=abc&state=st", follow_redirects=False)
+    clean.post("/api/modules/security-awareness-essentials/progress",
+               json={"furthest_ordinal": 12})
+
+    clean.cookies.delete(auth.COOKIE_NAME)
+    microsoft(good_claims())
+    clean.cookies.set(entra.FLOW_COOKIE, auth.sign({"state": "st"}))
+    back = clean.get("/auth/callback?code=abc&state=st", follow_redirects=False)
+    assert back.headers["location"] == \
+        "/module/security-awareness-essentials?slide=12"
+
+
+def test_a_deep_link_still_beats_the_resume_point(clean, microsoft):
+    microsoft(good_claims())
+    clean.cookies.set(entra.FLOW_COOKIE, auth.sign({"state": "st"}))
+    clean.get("/auth/callback?code=abc&state=st", follow_redirects=False)
+    clean.post("/api/modules/security-awareness-essentials/progress",
+               json={"furthest_ordinal": 12})
+
+    clean.cookies.delete(auth.COOKIE_NAME)
+    microsoft(good_claims())
+    clean.cookies.set(entra.FLOW_COOKIE,
+                      auth.sign({"state": "st", "next": "/module/x?slide=3"}))
+    back = clean.get("/auth/callback?code=abc&state=st", follow_redirects=False)
+    assert back.headers["location"] == "/module/x?slide=3"

@@ -98,7 +98,8 @@ def read(token: str, now: Optional[float] = None) -> Optional[Dict[str, Any]]:
 
 
 def upsert_learner(entra_oid: str, email: str, upn: str = "",
-                   display_name: str = "", department: str = "") -> Dict[str, Any]:
+                   display_name: str = "", department: str = "",
+                   given_name: str = "", family_name: str = "") -> Dict[str, Any]:
     """Find or create the person behind an Entra identity.
 
     Matched on `entra_oid`, which Entra guarantees is immutable, and never on
@@ -108,17 +109,26 @@ def upsert_learner(entra_oid: str, email: str, upn: str = "",
     """
     return db.one(
         """
-        INSERT INTO learner (entra_oid, email, upn, display_name, department)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO learner (entra_oid, email, upn, display_name, department,
+                             given_name, family_name)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (entra_oid) DO UPDATE SET
             email        = EXCLUDED.email,
             upn          = EXCLUDED.upn,
             display_name = EXCLUDED.display_name,
             department   = COALESCE(NULLIF(EXCLUDED.department, ''),
-                                    learner.department)
-        RETURNING id, email, entra_oid, upn, display_name, department
+                                    learner.department),
+            -- Kept if Entra stops sending them: a tenant that turns off the
+            -- profile claims should not blank a name already on record.
+            given_name   = COALESCE(NULLIF(EXCLUDED.given_name, ''),
+                                    learner.given_name),
+            family_name  = COALESCE(NULLIF(EXCLUDED.family_name, ''),
+                                    learner.family_name)
+        RETURNING id, email, entra_oid, upn, display_name, department,
+                  given_name, family_name
         """,
-        (entra_oid, email, upn, display_name, department))
+        (entra_oid, email, upn, display_name, department,
+         given_name, family_name))
 
 
 def current_learner(request: Request) -> Dict[str, Any]:
@@ -127,8 +137,9 @@ def current_learner(request: Request) -> Dict[str, Any]:
     if not claims:
         raise HTTPException(status_code=401, detail="not signed in")
     learner = db.one(
-        "SELECT id, email, entra_oid, upn, display_name, department "
-        "FROM learner WHERE entra_oid = %s", (claims["oid"],))
+        "SELECT id, email, entra_oid, upn, display_name, department, "
+        "given_name, family_name FROM learner WHERE entra_oid = %s",
+        (claims["oid"],))
     if not learner:
         # A validly signed session for somebody who is no longer in the
         # database — a leaver, or a restored backup. Treat as signed out.

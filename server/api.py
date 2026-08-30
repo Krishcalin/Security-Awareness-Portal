@@ -15,20 +15,25 @@ is a new attempt, numbered, and the number is kept.
 """
 from __future__ import annotations
 
+import io as _io
 import json
+import math
 import logging
+import secrets
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import (BackgroundTasks, Depends, FastAPI, HTTPException,
+                     Request)
 from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
-                               Response)
+                               Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from server import auth, content, db, entra, ingest
+from server import auth, certificate, content, db, entra, ingest, mailer
 from server.config import settings
 
 log = logging.getLogger(__name__)
@@ -140,13 +145,23 @@ def modules(learner: Dict[str, Any] = Depends(auth.current_learner)):
                  WHERE q.module_id = m.id AND NOT q.retired) AS questions,
                e.started_at, e.completed_at,
                COALESCE(e.furthest_ordinal, 0) AS furthest_ordinal,
+               COALESCE(e.last_ordinal, 0) AS last_ordinal,
                (SELECT max(a.attempt_no) FROM attempt a
                  WHERE a.module_id = m.id AND a.learner_id = %(learner)s)
                    AS attempts,
                (SELECT a.score FROM attempt a
                  WHERE a.module_id = m.id AND a.learner_id = %(learner)s
                    AND a.finished_at IS NOT NULL
-                 ORDER BY a.attempt_no DESC LIMIT 1) AS latest_score
+                 ORDER BY a.attempt_no DESC LIMIT 1) AS latest_score,
+               -- Whether they passed is decided here, against the same
+               -- threshold `finish` uses. The browser is not asked to work it
+               -- out from a score, because then there are two answers.
+               EXISTS (SELECT 1 FROM certificate c
+                        WHERE c.module_id = m.id
+                          AND c.learner_id = %(learner)s) AS passed,
+               (SELECT c.serial FROM certificate c
+                 WHERE c.module_id = m.id AND c.learner_id = %(learner)s
+                 ORDER BY c.issued_at DESC LIMIT 1) AS certificate_serial
         FROM module m
         LEFT JOIN enrolment e
                ON e.module_id = m.id AND e.learner_id = %(learner)s
@@ -200,15 +215,22 @@ def record_progress(slug: str, progress: Progress,
     row = db.one(
         """
         INSERT INTO enrolment (learner_id, module_id, started_at,
-                               furthest_ordinal)
-        VALUES (%s, %s, now(), %s)
+                               furthest_ordinal, last_ordinal, last_seen_at)
+        VALUES (%s, %s, now(), %s, %s, now())
         ON CONFLICT (learner_id, module_id) DO UPDATE
             SET furthest_ordinal = greatest(enrolment.furthest_ordinal,
                                             EXCLUDED.furthest_ordinal),
+                -- Where they actually are, which is not the same number.
+                -- Somebody at slide 18 who goes back to 4 to re-read it and
+                -- then closes the tab left at 4, and that is where they
+                -- should resume; their progress is still 18.
+                last_ordinal = EXCLUDED.last_ordinal,
+                last_seen_at = now(),
                 started_at = COALESCE(enrolment.started_at, now())
-        RETURNING furthest_ordinal
+        RETURNING furthest_ordinal, last_ordinal
         """,
-        (learner["id"], module["id"], progress.furthest_ordinal))
+        (learner["id"], module["id"], progress.furthest_ordinal,
+         progress.furthest_ordinal))
     return row
 
 
@@ -313,7 +335,7 @@ def answer(attempt_id: int, answer: Answer,
 
 
 @app.post("/api/attempts/{attempt_id}/finish")
-def finish(attempt_id: int,
+def finish(attempt_id: int, background: BackgroundTasks,
            learner: Dict[str, Any] = Depends(auth.current_learner)):
     """Close the attempt and score it.
 
@@ -337,6 +359,21 @@ def finish(attempt_id: int,
         "UPDATE enrolment SET completed_at = COALESCE(completed_at, now()) "
         "WHERE learner_id = %s AND module_id = %s",
         (learner["id"], attempt["module_id"]))
+
+    # The pass mark lives here and nowhere else. A threshold the browser also
+    # holds is a threshold the two can disagree about, and the disagreement
+    # shows up as a certificate the server never awarded.
+    passed = out_of > 0 and row["score"] / out_of >= settings.pass_mark
+    issued = None
+    if passed:
+        module = db.one("SELECT * FROM module WHERE id = %s",
+                        (attempt["module_id"],))
+        issued = _issue(learner, module, attempt_id, row["score"], out_of)
+        # After the response. Nobody waits on a mail server to be shown the
+        # result they just earned, and the certificate is downloadable whether
+        # or not the email ever leaves.
+        background.add_task(_deliver, issued["id"])
+
     return {
         "attempt_no": row["attempt_no"],
         "score": row["score"],
@@ -345,8 +382,137 @@ def finish(attempt_id: int,
         # Said plainly rather than left to be inferred from attempt_no: a pass
         # on the third go is not the same evidence as a pass on the first.
         "first_attempt": row["attempt_no"] == 1,
+        "passed": passed,
+        "pass_mark": settings.pass_mark,
+        "needed": math.ceil(out_of * settings.pass_mark) if out_of else 0,
+        "certificate": {
+            "serial": issued["serial"],
+            "name_printed": issued["name_printed"],
+            "issued_at": issued["issued_at"],
+            # What the portal will attempt, said before it is attempted, so
+            # "check your inbox" is not printed at somebody whose certificate
+            # was never going to be posted anywhere.
+            "will_email_to": learner["email"] if settings.mail_configured else "",
+        } if issued else None,
     }
 
+
+def resume_path(learner_id: int) -> str:
+    """Where this person left off, as a path the app can be sent to.
+
+    An unfinished attempt wins over a slide: somebody who stopped in the middle
+    of the questions is further on than the last slide they looked at, and
+    dropping them back into the deck would lose the answers they had already
+    given.
+    """
+    attempt = db.one(
+        """
+        SELECT m.slug FROM attempt a JOIN module m ON m.id = a.module_id
+        WHERE a.learner_id = %s AND a.finished_at IS NULL
+        ORDER BY a.started_at DESC LIMIT 1
+        """, (learner_id,))
+    if attempt:
+        return "/module/%s/check" % attempt["slug"]
+
+    open_module = db.one(
+        """
+        SELECT m.slug, e.last_ordinal, e.furthest_ordinal
+        FROM enrolment e JOIN module m ON m.id = e.module_id
+        WHERE e.learner_id = %s AND e.completed_at IS NULL AND m.published
+        ORDER BY e.last_seen_at DESC NULLS LAST, e.started_at DESC LIMIT 1
+        """, (learner_id,))
+    if not open_module:
+        return "/"
+    at = open_module["last_ordinal"] or open_module["furthest_ordinal"] or 0
+    return ("/module/%s?slide=%d" % (open_module["slug"], at) if at > 1
+            else "/module/%s" % open_module["slug"])
+
+
+@app.get("/api/resume")
+def resume(learner: Dict[str, Any] = Depends(auth.current_learner)):
+    """Used by the app on load, so a fresh tab lands where the last one
+    stopped rather than at the beginning."""
+    return {"path": resume_path(learner["id"])}
+
+
+# ── certificates ───────────────────────────────────────────────────────────
+
+def _serial() -> str:
+    """Readable, and not guessable. Downloads are checked against ownership
+    rather than against the serial being secret, but a certificate people
+    quote to each other should not also be a sequence anybody can walk."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"   # no I/O/0/1
+    body = "".join(secrets.choice(alphabet) for _ in range(8))
+    return "SAT-%d-%s" % (datetime.now(timezone.utc).year, body)
+
+
+def _issue(learner: Dict[str, Any], module: Dict[str, Any], attempt_id: int,
+           score: int, out_of: int) -> Dict[str, Any]:
+    """Record the certificate. The name is stored AS PRINTED.
+
+    A certificate is a statement about a moment. Somebody changing their
+    surname next year must not retrospectively alter the document they were
+    sent, and re-rendering must not quietly produce something different from
+    what went out by email.
+    """
+    name = certificate.printed_name(
+        learner.get("given_name", ""), learner.get("family_name", ""),
+        learner.get("display_name", ""), learner.get("email", ""))
+    return db.one(
+        """
+        INSERT INTO certificate (serial, learner_id, module_id, attempt_id,
+                                 name_printed, score, out_of)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (attempt_id) DO UPDATE SET serial = certificate.serial
+        RETURNING *
+        """,
+        (_serial(), learner["id"], module["id"], attempt_id, name,
+         score, out_of))
+
+
+def _deliver(certificate_id: int) -> None:
+    """Email the certificate, and write down what happened either way.
+
+    Runs after the response, so nobody waits on a mail server to see the
+    result they have just earned.
+    """
+    row = db.one(
+        "SELECT c.*, l.email FROM certificate c JOIN learner l "
+        "ON l.id = c.learner_id WHERE c.id = %s", (certificate_id,))
+    if not row or row["emailed_at"]:
+        return
+    try:
+        pdf = certificate.render(row["name_printed"],
+                                 row["issued_at"].date(), row["serial"])
+        mailer.send_certificate(row["email"], row["name_printed"], pdf,
+                                row["serial"], row["score"], row["out_of"])
+    except Exception as problem:                        # noqa: BLE001
+        # Including mailer.NotConfigured. A failure to send is a fact about
+        # this certificate, not an error to raise at somebody who has just
+        # finished their training — and it is recorded so it can be retried
+        # and so nobody is told it was sent when it was not.
+        log.warning("certificate %s not emailed: %s", row["serial"], problem)
+        db.execute("UPDATE certificate SET email_error = %s WHERE id = %s",
+                   (str(problem)[:500], certificate_id))
+        return
+    db.execute("UPDATE certificate SET emailed_at = now(), emailed_to = %s, "
+               "email_error = '' WHERE id = %s", (row["email"], certificate_id))
+
+
+@app.get("/api/certificates/{serial}")
+def download_certificate(serial: str,
+                         learner: Dict[str, Any] = Depends(auth.current_learner)):
+    """The PDF. Yours only — the serial is not a password."""
+    row = db.one("SELECT * FROM certificate WHERE serial = %s", (serial,))
+    if not row or row["learner_id"] != learner["id"]:
+        raise HTTPException(status_code=404, detail="no such certificate")
+    pdf = certificate.render(row["name_printed"], row["issued_at"].date(),
+                             row["serial"])
+    return StreamingResponse(
+        _io.BytesIO(pdf), media_type="application/pdf",
+        headers={"Content-Disposition":
+                 'attachment; filename="Security-Awareness-Certificate-%s.pdf"'
+                 % row["serial"]})
 
 # ── signing in ─────────────────────────────────────────────────────────────
 # Declared before the catch-all below, or the front page would be served for
@@ -409,12 +575,18 @@ def sign_in_callback(request: Request) -> Response:
     except entra.SignInRefused as refused:
         return _sign_in_problem(str(refused), 403)
 
-    auth.upsert_learner(
+    learner = auth.upsert_learner(
         entra_oid=identity["oid"], email=identity["email"],
-        upn=identity["upn"], display_name=identity["display_name"])
+        upn=identity["upn"], display_name=identity["display_name"],
+        given_name=identity["given_name"], family_name=identity["family_name"])
 
-    response = RedirectResponse(entra.safe_next(flow.get("next")),
-                                status_code=303)
+    # Straight back to where they left off. Somebody who signed out halfway
+    # through slide twelve should not have to find their way back to slide
+    # twelve; a deep link they followed still wins over this.
+    target = entra.safe_next(flow.get("next"))
+    if target == "/":
+        target = resume_path(learner["id"])
+    response = RedirectResponse(target, status_code=303)
     _set_session(response, identity["oid"])
     response.delete_cookie(entra.FLOW_COOKIE, path="/auth")
     return response

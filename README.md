@@ -4,7 +4,9 @@ A narrated security awareness course that measures whether people learned
 something, rather than whether they reached the last page.
 
 Twenty-one slides with voice-over and a twelve-question knowledge check.
-Sign-in is through Microsoft Entra ID.
+Sign-in is through Microsoft Entra ID. Pass at 70% and a certificate is issued
+in your name and emailed from the CISO's office. Leave halfway through and you
+come back to the slide you left.
 
 ---
 
@@ -61,8 +63,8 @@ cd frontend && npm install && npm run dev     # http://localhost:5174
 ### Tests
 
 ```bash
-python -m pytest                # 82, needs the database from docker compose
-cd frontend && npm test         # 26
+python -m pytest                # 120, needs the database from docker compose
+cd frontend && npm test         # 31
 ```
 
 ---
@@ -71,6 +73,7 @@ cd frontend && npm test         # 26
 
 ```
 assets/slides/       the artwork, 21 PNGs
+assets/certificate/  the certificate artwork (PNG master + derived JPEG)
 data/source/         the voice-over script, and the knowledge check
 data/modules/        built content (generated — do not hand-edit)
 tools/build_content  pairs artwork with script; refuses to emit a mismatch
@@ -99,6 +102,67 @@ On a machine with no voices installed the player **says so** and shows the
 script. The transcript is on screen throughout regardless, and the word being
 spoken is highlighted — which is also what makes the course usable without
 hearing it.
+
+
+---
+
+## Certificates
+
+Pass the knowledge check at **70%** and a certificate is issued, downloadable
+immediately, and emailed from the CISO's address with the PDF attached.
+
+It is the supplied artwork with two things drawn on it — the name and the date.
+Both positions are measured from the artwork rather than guessed, and a test
+fails if a redraw moves the rules out from under them.
+
+**The name is the given and family names from Entra**, as separate claims.
+Entra's `name` is a *display* name, which in plenty of tenants is
+"De, Krishnendu (Security)" — splitting that on a space is how the wrong thing
+ends up printed on somebody's certificate. If a tenant does not populate the
+name claims, it falls back to the display name and then to the local part of
+the email address, because a blank line where a name should be is only noticed
+by the person who receives it. A name too long for the rule is set smaller,
+never truncated.
+
+**The name is frozen at issue.** A certificate is a statement about a moment:
+somebody changing their surname next year does not retrospectively alter the
+document they were already sent, and re-rendering it for download cannot
+produce something different from what went out by email.
+
+**A failure to send is recorded, not swallowed.** An email that bounced, one
+that was never attempted because SMTP is not configured, and one that arrived
+look identical from inside an application unless the difference is written
+down — so `certificate.emailed_at` and `certificate.email_error` are that
+difference. The screen says "on its way to <address>" only when something is
+actually being posted, and the certificate is downloadable either way. Mail is
+a copy, never the delivery mechanism.
+
+> **Deployment note.** Sending as an address at a domain whose mail this server
+> does not handle will be rejected or filed as spam, and being the CISO's
+> address makes that *more* likely rather than less — those domains tend to
+> have a strict DMARC policy, which is the point of having one. This host must
+> be an authorised sender in the domain's SPF record, and the message ought to
+> be DKIM-signed. Leave `SMTP_HOST` unset and nothing is sent at all.
+
+## Picking up where you left off
+
+Progress is written on every slide change, and two numbers are kept because
+they answer different questions:
+
+| | |
+|---|---|
+| `furthest_ordinal` | how far they got — a high-water mark, never goes down |
+| `last_ordinal` | where they actually were when they stopped |
+
+Somebody who reaches slide 18, goes back to slide 4 to re-read it and closes
+the tab **left at 4**, and that is where they resume — while their progress is
+still 18. Signing in takes them straight there rather than to the front page,
+and a deep link they followed still wins over it.
+
+An unfinished set of questions beats a slide: somebody who stopped halfway
+through the check is further on than the last slide they looked at, and
+dropping them back into the deck would strand the answers they had already
+given, which cannot be given again in the same attempt.
 
 ---
 
@@ -135,6 +199,12 @@ reading.
 as it was asked, and a question that is no longer authored is retired rather
 than deleted — `response` references `question` with `ON DELETE CASCADE`, so
 deleting one would destroy the answers that are the whole point.
+
+**A certificate is never issued by the browser.** The pass mark lives on the
+server and nowhere else. A threshold the client also holds is one the two can
+disagree about, and the disagreement shows up as a certificate the server never
+awarded. Somebody else's certificate is a 404, because the serial is quotable
+and must not also be the key to the PDF.
 
 **Sign-in is scoped to your tenant.** The authority is the tenant id, never
 `common`, and the `tid` claim is checked as well. People are matched on the

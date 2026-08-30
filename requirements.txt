@@ -4,6 +4,8 @@ uvicorn[standard]>=0.27
 pydantic>=2.6
 psycopg[binary]>=3.1
 psycopg-pool>=3.2
+reportlab>=4.0       # renders the certificate PDF
+pillow>=10.0         # derives the certificate render source
 
 # Microsoft's own library for the Entra sign-in flow. Validating an ID token
 # means checking a signature against a rotating JWKS, the issuer, the
@@ -14,3 +16,5 @@ msal>=1.31
 # Tests
 pytest>=7.0
 httpx>=0.27          # required by fastapi.testclient
+aiosmtpd>=1.4        # a real SMTP server, so the send path is tested
+pypdfium2>=4.0       # reads back the rendered certificate

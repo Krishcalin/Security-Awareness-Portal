@@ -60,4 +60,12 @@ export const api = {
 
   finish: (attemptId: number) =>
     post<Result>(`/api/attempts/${attemptId}/finish`),
+
+  /** Where this person left off, decided on the server. */
+  resume: () => request<{ path: string }>("/api/resume"),
 }
+
+/** A plain link, so the browser downloads it rather than the app holding a
+ *  700KB PDF in memory to hand back to the browser anyway. */
+export const certificateUrl = (serial: string) =>
+  `/api/certificates/${encodeURIComponent(serial)}`

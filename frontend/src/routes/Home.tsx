@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react"
-import { Link } from "react-router"
-import { Clock, ListChecks, PlayCircle } from "lucide-react"
+import { Link, useNavigate } from "react-router"
+import { Award, Clock, ListChecks, PlayCircle } from "lucide-react"
 
-import { api } from "../api/client"
+import { api, certificateUrl } from "../api/client"
 import type { ModuleSummary } from "../api/types"
 
 /**
@@ -16,11 +16,13 @@ import type { ModuleSummary } from "../api/types"
  */
 function standing(module: ModuleSummary): { label: string; tone: string } {
   if (module.latest_score !== null && module.attempts) {
-    const passed = module.latest_score >= Math.ceil(module.questions * 0.8)
     return {
       label: `${module.latest_score} of ${module.questions}` +
         (module.attempts > 1 ? ` · attempt ${module.attempts}` : ""),
-      tone: passed ? "text-right" : "text-wrong",
+      // Whether that is a pass is the server's answer, not a threshold
+      // duplicated here where it can drift out of step with the one
+      // that decides whether a certificate exists.
+      tone: module.passed ? "text-right" : "text-wrong",
     }
   }
   if (module.completed_at) return { label: "Reached the end", tone: "text-muted" }
@@ -33,13 +35,41 @@ function standing(module: ModuleSummary): { label: string; tone: string } {
   return { label: "Not started", tone: "text-muted" }
 }
 
+/** Set once a tab has already offered to resume, so "back to your
+ *  training" reaches the list instead of bouncing straight back into the
+ *  course. Per tab, so a fresh sign-in resumes again. */
+const RESUMED = "resumed-this-session"
+
 export function Home() {
   const [modules, setModules] = useState<ModuleSummary[] | null>(null)
   const [problem, setProblem] = useState("")
+  const navigate = useNavigate()
 
   useEffect(() => {
     api.modules().then(setModules).catch((error) => setProblem(String(error.message)))
   }, [])
+
+  // Somebody who signed out halfway through slide twelve is taken back to
+  // slide twelve rather than having to find it. Only on the first landing
+  // in a tab, or the list would be unreachable.
+  useEffect(() => {
+    let stale = false
+    try {
+      if (sessionStorage.getItem(RESUMED)) return
+      sessionStorage.setItem(RESUMED, "1")
+    } catch {
+      // Private browsing, or storage blocked. Showing the list is the
+      // safe outcome; nothing is lost but the convenience.
+      return
+    }
+    api.resume().then(({ path }) => {
+      if (!stale && path !== "/") navigate(path, { replace: true })
+    }).catch(() => {
+      // The list is already on screen; a failed resume is not worth an
+      // error message.
+    })
+    return () => { stale = true }
+  }, [navigate])
 
   if (problem) {
     return <p className="mx-auto max-w-5xl px-5 py-10 text-wrong">{problem}</p>
@@ -59,8 +89,8 @@ export function Home() {
       <ul className="mt-8 grid gap-4">
         {modules.map((module) => {
           const status = standing(module)
-          const resumeAt = module.furthest_ordinal > 1
-            ? `?slide=${module.furthest_ordinal}` : ""
+          const at = module.last_ordinal || module.furthest_ordinal
+          const resumeAt = at > 1 ? `?slide=${at}` : ""
           return (
             <li
               key={module.slug}
@@ -83,14 +113,27 @@ export function Home() {
                     <span className={status.tone}>{status.label}</span>
                   </div>
                 </div>
-                <Link
-                  to={`/module/${module.slug}${resumeAt}`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2
-                             text-sm font-medium text-white hover:opacity-90"
-                >
-                  <PlayCircle size={17} aria-hidden />
-                  {module.furthest_ordinal > 0 ? "Resume" : "Start"}
-                </Link>
+                <div className="flex flex-col items-stretch gap-2">
+                  <Link
+                    to={`/module/${module.slug}${resumeAt}`}
+                    className="inline-flex items-center justify-center gap-2
+                               rounded-lg bg-accent px-4 py-2 text-sm
+                               font-medium text-white hover:opacity-90"
+                  >
+                    <PlayCircle size={17} aria-hidden />
+                    {module.furthest_ordinal > 0 ? "Resume" : "Start"}
+                  </Link>
+                  {module.certificate_serial && (
+                    <a
+                      href={certificateUrl(module.certificate_serial)}
+                      className="inline-flex items-center justify-center gap-2
+                                 rounded-lg border border-line px-4 py-2 text-sm"
+                    >
+                      <Award size={16} aria-hidden />
+                      Certificate
+                    </a>
+                  )}
+                </div>
               </div>
             </li>
           )

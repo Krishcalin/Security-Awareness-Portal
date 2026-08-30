@@ -19,8 +19,17 @@ export interface ModuleSummary {
   started_at: string | null
   completed_at: string | null
   furthest_ordinal: number
+  /** Where they actually were when they stopped, which is not the same
+   *  as how far they got: somebody who went back to re-read slide 4
+   *  resumes at 4, and their progress is still 18. */
+  last_ordinal: number
   attempts: number | null
   latest_score: number | null
+  /** Decided on the server, against the same threshold that issues the
+   *  certificate. The browser is not asked to work it out from a score,
+   *  because then there are two answers to the same question. */
+  passed: boolean
+  certificate_serial: string | null
 }
 
 export interface Lesson {
@@ -75,12 +84,27 @@ export interface Reveal {
   teaches: number | null
 }
 
+export interface Certificate {
+  serial: string
+  name_printed: string
+  issued_at: string
+  /** The address the portal will send to, or empty when it will not send at
+   *  all. Empty means say nothing about email, rather than "check your
+   *  inbox" for a message that was never posted. */
+  will_email_to: string
+}
+
 export interface Result {
   attempt_no: number
   score: number
   out_of: number
   unanswered: number
   first_attempt: boolean
+  passed: boolean
+  pass_mark: number
+  /** How many were needed to pass, so a near miss can say so precisely. */
+  needed: number
+  certificate: Certificate | null
 }
 
 export interface Learner {

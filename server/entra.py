@@ -127,6 +127,11 @@ def complete(flow: Dict[str, Any], query: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "oid": oid,
+        # Separately, not parsed out of `name`: a display name is whatever the
+        # directory has been told to show, and splitting "de, Krishnendu
+        # (Security)" on a space puts the wrong thing on a certificate.
+        "given_name": claims.get("given_name", ""),
+        "family_name": claims.get("family_name", ""),
         # `preferred_username` is the UPN in Entra and is a display attribute:
         # kept for support, never used to match a person to their record.
         "upn": claims.get("preferred_username", ""),

@@ -295,3 +295,51 @@ def test_the_catch_all_does_not_serve_files_outside_the_app(app_client):
     """`path` comes from the URL."""
     escape = app_client.get("/../../server/schema.sql")
     assert "CREATE TABLE" not in escape.text
+
+
+# ── coming back to where you left ──────────────────────────────────────────
+
+def test_progress_records_where_they_are_as_well_as_how_far(signed_in):
+    """Two different numbers. Somebody at slide 18 who scrolls back to 4 and
+    closes the tab left at 4, and that is where they resume — while their
+    progress is still 18."""
+    from server import db
+    url = "/api/modules/%s/progress" % SLUG
+    signed_in.post(url, json={"furthest_ordinal": 18})
+    signed_in.post(url, json={"furthest_ordinal": 4})
+    row = db.one("SELECT furthest_ordinal, last_ordinal, last_seen_at "
+                 "FROM enrolment")
+    assert row["furthest_ordinal"] == 18
+    assert row["last_ordinal"] == 4
+    assert row["last_seen_at"] is not None
+
+
+def test_resume_points_at_the_slide_they_left(signed_in):
+    signed_in.post("/api/modules/%s/progress" % SLUG,
+                   json={"furthest_ordinal": 12})
+    assert signed_in.get("/api/resume").json()["path"] == \
+        "/module/%s?slide=12" % SLUG
+
+
+def test_resume_points_at_the_questions_when_one_is_half_answered(signed_in):
+    """Being dropped back into the deck would lose the answers already
+    given, and they cannot be given again in the same attempt."""
+    signed_in.post("/api/modules/%s/progress" % SLUG,
+                   json={"furthest_ordinal": 12})
+    started, question = _first_question(signed_in)
+    signed_in.post("/api/attempts/%d/responses" % started["attempt_id"],
+                   json={"ordinal": question["ordinal"], "chosen_index": 0})
+    assert signed_in.get("/api/resume").json()["path"] == \
+        "/module/%s/check" % SLUG
+
+
+def test_resume_is_the_front_page_for_somebody_who_has_not_started(signed_in):
+    assert signed_in.get("/api/resume").json()["path"] == "/"
+
+
+def test_a_finished_module_does_not_drag_them_back_into_it(signed_in):
+    signed_in.post("/api/modules/%s/progress" % SLUG,
+                   json={"furthest_ordinal": 21})
+    started, _ = _first_question(signed_in)
+    signed_in.post("/api/attempts/%d/finish" % started["attempt_id"])
+    assert signed_in.get("/api/resume").json()["path"] == "/"

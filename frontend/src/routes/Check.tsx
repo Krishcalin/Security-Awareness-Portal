@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useParams } from "react-router"
-import { Check as Tick, CircleAlert, X } from "lucide-react"
+import {
+  Award, Check as Tick, CircleAlert, Download, Mail, X,
+} from "lucide-react"
 
-import { api } from "../api/client"
+import { api, certificateUrl } from "../api/client"
 import type { Result, Reveal, StartedAttempt } from "../api/types"
 
 /**
@@ -175,9 +177,14 @@ export function Check() {
  * A pass on the third attempt is not the same evidence as a pass on the first,
  * so this does not print the same sentence for both. Unanswered questions are
  * named rather than quietly left out of the total.
+ *
+ * `passed` comes from the server. Recomputing it here from the score
+ * would give a second answer to a question that already has one, and
+ * the answer that decides whether a certificate exists is the one the
+ * server gave.
  */
 function Outcome({ slug, result }: { slug: string; result: Result }) {
-  const passed = result.score >= Math.ceil(result.out_of * 0.8)
+  const passed = result.passed
   return (
     <div className="mx-auto max-w-2xl px-5 py-12">
       <p className="text-sm text-muted">
@@ -193,8 +200,42 @@ function Outcome({ slug, result }: { slug: string; result: Result }) {
         {passed && !result.first_attempt &&
           `You have this now. It took ${result.attempt_no} attempts, and that is recorded — not as a mark against you, but because a pass on the first go and a pass on the third are different pieces of evidence.`}
         {!passed &&
-          "Worth another look. The explanations you were given cover everything that was asked, and the slides are still there."}
+          `You needed ${result.needed} of ${result.out_of} to pass. Worth another look: the explanations you were given cover everything that was asked, and the slides are still there.`}
       </p>
+
+      {result.certificate && (
+        <div className="mt-6 rounded-xl border border-accent bg-accent-soft p-5">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <Award size={19} aria-hidden />
+            Your certificate is ready
+          </h2>
+          <p className="mt-2 text-sm">
+            Issued to <strong>{result.certificate.name_printed}</strong>, from
+            your name in the company directory. Reference{" "}
+            <span className="tabular-nums">{result.certificate.serial}</span>.
+          </p>
+          <a
+            href={certificateUrl(result.certificate.serial)}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-accent
+                       px-4 py-2 text-sm font-medium text-white"
+          >
+            <Download size={16} aria-hidden />
+            Download the PDF
+          </a>
+          {/* Said only when something is actually being posted. "Check your
+              inbox", printed at somebody whose certificate was never sent,
+              is worse than saying nothing about email at all. */}
+          {result.certificate.will_email_to && (
+            <p className="mt-3 flex items-start gap-2 text-sm">
+              <Mail size={16} className="mt-0.5 shrink-0" aria-hidden />
+              <span>
+                A copy is on its way to {result.certificate.will_email_to} from
+                the office of the CISO.
+              </span>
+            </p>
+          )}
+        </div>
+      )}
 
       {result.unanswered > 0 && (
         <p className="mt-4 flex items-start gap-2 rounded-lg bg-sunk px-4 py-3 text-sm">

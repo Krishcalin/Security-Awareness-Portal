@@ -210,3 +210,56 @@ ALTER TABLE question ADD COLUMN IF NOT EXISTS
 -- one that just ranks staff.
 ALTER TABLE question ADD COLUMN IF NOT EXISTS
     teaches integer;
+
+-- ── the name that goes on a certificate ────────────────────────────────────
+--
+-- Entra's `name` claim is a display name, and a display name is whatever the
+-- directory has been told to show — "de, Krishnendu (Security)" in plenty of
+-- tenants. A certificate needs the given and family names as separate claims.
+ALTER TABLE learner ADD COLUMN IF NOT EXISTS given_name  text NOT NULL DEFAULT '';
+ALTER TABLE learner ADD COLUMN IF NOT EXISTS family_name text NOT NULL DEFAULT '';
+
+-- ── coming back to where you left ──────────────────────────────────────────
+--
+-- Kept separately from `furthest_ordinal`, which is a high-water mark and must
+-- not go down. Somebody who reaches slide 18, scrolls back to 4 to re-read it
+-- and closes the tab left at 4 — that is where they should resume, while their
+-- progress is still 18.
+ALTER TABLE enrolment ADD COLUMN IF NOT EXISTS
+    last_ordinal integer NOT NULL DEFAULT 0;
+ALTER TABLE enrolment ADD COLUMN IF NOT EXISTS
+    last_seen_at timestamptz;
+
+-- ── certificates ───────────────────────────────────────────────────────────
+--
+-- Issued on a passing attempt and never regenerated from live data. A
+-- certificate is a statement about a moment: it records the name AS PRINTED
+-- and the score as earned, so that somebody changing their surname next year
+-- does not retrospectively alter the document they were sent, and re-rendering
+-- it cannot quietly produce something different from what was emailed.
+
+CREATE TABLE IF NOT EXISTS certificate (
+    id            bigserial PRIMARY KEY,
+    -- Quoted on the certificate so a holder, or their manager, can check one
+    -- that arrived by email against what this database says was issued.
+    serial        text NOT NULL UNIQUE,
+    learner_id    bigint NOT NULL REFERENCES learner(id) ON DELETE CASCADE,
+    module_id     bigint NOT NULL REFERENCES module(id) ON DELETE CASCADE,
+    -- One per passing attempt: a retake that passes again does not silently
+    -- replace the record of the attempt that earned the first one.
+    attempt_id    bigint NOT NULL UNIQUE REFERENCES attempt(id) ON DELETE CASCADE,
+    name_printed  text NOT NULL,
+    score         integer NOT NULL,
+    out_of        integer NOT NULL,
+    issued_at     timestamptz NOT NULL DEFAULT now(),
+    -- Delivery is recorded, including its failures. An email that bounced and
+    -- an email that was never attempted look identical from the outside, and
+    -- both look like a certificate that was sent.
+    emailed_to    text NOT NULL DEFAULT '',
+    emailed_at    timestamptz,
+    email_error   text NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS certificate_learner_idx ON certificate (learner_id);
+CREATE INDEX IF NOT EXISTS certificate_unsent_idx ON certificate (issued_at)
+    WHERE emailed_at IS NULL;
