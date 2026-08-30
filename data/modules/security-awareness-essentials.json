@@ -8,7 +8,7 @@
   "lessons": [
     {
       "ordinal": 1,
-      "title": "Title: Security Awareness Training",
+      "title": "Security Awareness Training",
       "image": "slides/01-title.png",
       "narration": "Welcome. Over the next few minutes we're going to talk about something that touches every single person here — security.\n\nNot the technical kind that lives inside firewalls and servers. The everyday kind that lives in your inbox, on your phone, at your desk, and in the small decisions you make without thinking twice.\n\nYou don't need a technical background to follow this. There's no jargon and no code. What you will get is a clear picture of how attackers actually try to reach us, what those attempts look like in real life, and the simple habits that stop them.\n\nHere's the thing worth remembering before we start. Attackers rarely break in through technology anymore. They walk in through people — through a rushed click, a reused password, a helpful answer given to the wrong person.\n\nThat doesn't make you the weak link. It makes you the control that works. Let's begin.",
       "narration_seconds": 61,
@@ -333,5 +333,5 @@
       "explains": "Negligent, not malicious — and that distinction matters because most insider risk looks exactly like this. The intent is good and the rule is known; convenience simply wins. The consequence is that two people now act under one identity, and nothing afterwards can tell them apart."
     }
   ],
-  "content_hash": "5177093601865c11"
+  "content_hash": "3c6ca747f364490d"
 }

@@ -42,7 +42,7 @@ INTENTIONALLY_SILENT = {
 #: below can still fail on a pairing NOBODY has checked — an allowlist of three
 #: is a decision, a disabled check is not.
 VERIFIED_PAIRINGS = {
-    1:  "'Title: Security Awareness Training' is the title slide, slug 'title'",
+    1:  "'Security Awareness Training' is the title slide, slug 'title'",
     6:  "'Multi-Factor Authentication' is abbreviated to 'mfa' in the artwork",
     20: "'Key Takeaways' is the artwork's 'summary' slide — its image reads "
         "'Key Takeaways — You're Ready!'",
@@ -59,7 +59,11 @@ def parse_scripts() -> dict:
     out = {}
     for i in range(0, len(parts), 3):
         number = int(parts[i])
-        title = parts[i + 1].strip()
+        # "## Slide 1 - Title: Security Awareness Training" carries a label
+        # from the script's own structure. Without this it reaches the player
+        # and the first thing every learner reads is "Title: ".
+        title = re.sub(r"^(Title|Slide|Heading)\s*:\s*", "",
+                       parts[i + 1].strip())
         # Everything up to the horizontal rule that ends the section.
         body = parts[i + 2].split("\n---")[0].strip()
         out[number] = (title, body)

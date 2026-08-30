@@ -1,0 +1,22 @@
+# Development database. A container of its own on a port of its own: sharing an
+# instance with another product means one `docker compose down -v` takes both.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: awareness-db
+    environment:
+      POSTGRES_USER: awareness
+      POSTGRES_PASSWORD: awareness
+      POSTGRES_DB: awareness
+    ports:
+      - "5434:5432"
+    volumes:
+      - awareness-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U awareness"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  awareness-db-data:

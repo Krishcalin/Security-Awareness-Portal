@@ -184,3 +184,29 @@ SELECT q.id                                        AS question_id,
 FROM question q
 LEFT JOIN response r ON r.question_id = q.id
 GROUP BY q.id, q.module_id, q.ordinal, q.prompt;
+
+-- ── keeping the promises made above ────────────────────────────────────────
+--
+-- Two of them are not kept by loading edited content over the top of old
+-- content, which is what the loader does every time a module is re-authored.
+
+-- "A result carries the version it was earned against, so editing a module
+-- does not silently rewrite history." `attempt.content_hash` records WHICH
+-- version, but the question rows are overwritten in place, so the wording that
+-- was actually on the screen is gone. This keeps it: what the person was
+-- asked, and what the options were, as at the moment they answered.
+ALTER TABLE response ADD COLUMN IF NOT EXISTS
+    asked jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+-- Deleting a question that is no longer authored would cascade to `response`
+-- and destroy exactly the evidence this schema exists to keep. Questions are
+-- retired instead — they stop being asked and stay answerable-about.
+ALTER TABLE question ADD COLUMN IF NOT EXISTS
+    retired boolean NOT NULL DEFAULT false;
+
+-- Which lesson this question tests. Without it a low correct rate is a verdict
+-- on the people who answered; with it, it points at the slide that failed to
+-- teach. That is the difference between a report that improves the course and
+-- one that just ranks staff.
+ALTER TABLE question ADD COLUMN IF NOT EXISTS
+    teaches integer;
