@@ -102,7 +102,7 @@ never reach the thing that runs.
 
 ```bash
 python -m pytest                # 274, needs the database from docker compose
-cd frontend && npm test         # 121
+cd frontend && npm test         # 122
 ```
 
 ---
@@ -214,13 +214,21 @@ element's own `play`, and releases its frame handle whenever it stops, or it
 could never be started a second time.
 
 **Moving on is earned; moving back is not.** The forward arrow is disabled
-until the slide's narration reaches the end, so the course cannot be clicked
-through in thirty seconds. Backwards is never gated, and neither is going
-forward again over ground already covered — somebody who has heard six slides
-can step back to the third and return to the sixth without listening again.
-Only crossing their own frontier costs anything. A course that made people sit
-through everything twice to get back to where they were would teach them to
+until the narration of the slide *on screen* has run to the end, so the course
+cannot be clicked through in thirty seconds. Backwards is never gated, and
+going forward again over slides already heard costs nothing — somebody who has
+heard one to six can step back to the third and walk forward without sitting
+through any of it twice. A course that charged for that would teach people to
 leave it playing to itself, which is the behaviour the gate exists to prevent.
+
+**What is remembered is which slides were heard, not how far somebody got.**
+Progress is recorded on *arrival* at a slide, so a high-water mark says where
+they have been — and being somewhere is exactly what this is meant to stop
+counting. The first version of this gate seeded itself from that figure, which
+meant anybody who had once clicked through the deck could click through it
+again. The set is per sitting: resuming a course tomorrow at the slide you
+stopped on means hearing that slide, which is the one you were in the middle
+of.
 
 The check lives in the step function rather than on the button, so the arrow
 keys obey it too; a greyed-out button with a working keyboard shortcut beside

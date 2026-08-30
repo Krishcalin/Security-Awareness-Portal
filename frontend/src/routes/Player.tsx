@@ -113,17 +113,23 @@ export function Player() {
   const [autoAdvance, setAutoAdvance] = useState(true)
   const [reachedEnd, setReachedEnd] = useState(false)
   /**
-   * The furthest slide anybody may move to, as an index.
+   * The slides whose narration has run to the end in this sitting.
    *
-   * Moving FORWARD past it is what listening to a slide buys. Moving back is
-   * never gated: somebody who wants to hear slide four again has already
-   * heard it, and making them sit through everything in between to get back
-   * would teach them to leave the tab playing to itself.
+   * The forward button is off until the slide ON SCREEN is in here. Not a
+   * high-water mark of how far somebody got: progress is recorded on arrival
+   * at a slide, so a mark like that says where they have BEEN, and being
+   * somewhere is exactly what this is meant to stop counting.
    *
-   * Seeded from the progress already recorded, so this is not a course that
-   * makes people who are half way through start again.
+   * A set rather than a number so that going back does not cost a second
+   * listen. Somebody who has heard one to six can step back to three and walk
+   * forward again without sitting through any of it twice — every slide on the
+   * way is one they have already heard. A slide they skipped past is not.
+   *
+   * Empty at the start of each sitting, including a resume. Coming back to a
+   * course tomorrow and continuing from the slide you stopped on means
+   * hearing that slide, which is the one you were in the middle of.
    */
-  const [unlocked, setUnlocked] = useState(0)
+  const [heardSlides, setHeardSlides] = useState<Set<number>>(new Set())
   const [showTranscript, setShowTranscript] = useState(wantsTranscript)
 
   const narrator = useRef(new Narrator())
@@ -139,6 +145,8 @@ export function Player() {
   const lastIndex = (detail?.lessons.length ?? 1) - 1
   const indexNow = useRef(index)
   indexNow.current = index
+  const detailNow = useRef<ModuleDetail | null>(null)
+  detailNow.current = detail
 
   const lesson: Lesson | undefined = detail?.lessons[index]
 
@@ -159,9 +167,6 @@ export function Player() {
       const resume = Number.isFinite(asked) && asked > 0
         ? loaded.lessons.findIndex((l) => l.ordinal === asked) : -1
       setIndex(resume >= 0 ? resume : 0)
-      const reached = loaded.lessons.findIndex(
-        (l) => l.ordinal === loaded.enrolment?.furthest_ordinal)
-      setUnlocked(reached >= 0 ? reached : 0)
     }).catch((error) => setProblem(String(error.message)))
   }, [slug, search])
 
@@ -238,9 +243,11 @@ export function Player() {
 
   const followRecording = startFollowing
 
-  /** This slide has been heard: the one after it is now reachable. */
+  /** This slide has been heard to the end, so the course can move on. */
   const heardToTheEnd = useCallback(() => {
-    setUnlocked((was) => Math.max(was, indexNow.current + 1))
+    const lesson = detailNow.current?.lessons[indexNow.current]
+    if (!lesson) return
+    setHeardSlides((was) => new Set(was).add(lesson.ordinal))
   }, [])
 
   const stopFollowing = useCallback(() => {
@@ -267,7 +274,8 @@ export function Player() {
     // no way on and no way to tell why.
     if (lesson && (!lesson.narration ||
                    (status === "unsupported" && !lesson.audio_url))) {
-      setUnlocked((was) => Math.max(was, index + 1))
+      setHeardSlides((was) => was.has(lesson.ordinal)
+        ? was : new Set(was).add(lesson.ordinal))
     }
   }, [lesson, index, status])
 
@@ -368,11 +376,13 @@ export function Player() {
     if (next === index) return
     // Forwards is what has to be earned. Checked here rather than only on the
     // button, so the arrow keys obey the same rule.
-    if (delta > 0 && next > unlocked) return
+    if (delta > 0 && !heardSlides.has(detail?.lessons[index]?.ordinal ?? -1)) {
+      return
+    }
     const wasPlaying = playing
     goTo(next)
     if (wasPlaying) window.setTimeout(() => speakLesson(next), 60)
-  }, [goTo, index, lastIndex, playing, speakLesson, unlocked])
+  }, [detail, goTo, heardSlides, index, lastIndex, playing, speakLesson])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -403,7 +413,7 @@ export function Player() {
   // this slide says anything, so they are not optional here.
   const nothingToHear = status === "unsupported" && !lesson.audio_url
   const atEnd = index === lastIndex
-  const mayGoOn = index + 1 <= unlocked
+  const mayGoOn = heardSlides.has(lesson.ordinal)
   const progress = ((index + 1) / detail.lessons.length) * 100
 
   return (

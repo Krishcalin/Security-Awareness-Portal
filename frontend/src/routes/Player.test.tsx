@@ -278,28 +278,28 @@ describe("the narration progress bar", () => {
   })
 
   it("goes back to nothing on the next slide", async () => {
-    const { tick } = driveFrames()
-    const two = detail({ narration_seconds: 100 })
-    two.lessons.push({ ...two.lessons[0], ordinal: 2, title: "Why Security Matters" })
-    // Somebody who has already been as far as slide two, so stepping to it is
-    // not the thing under test here. Earning that step is tested below.
-    two.enrolment = { started_at: null, completed_at: null,
-                      furthest_ordinal: 2 }
+    const { started, tick } = driveFrames()
+    const recording = fakeRecording(100)
+    const two = detail({ audio_url: "narration/essentials/01.mp3",
+                         narration_seconds: 100 })
+    two.lessons.push({ ...two.lessons[0], ordinal: 2,
+                       title: "Why Security Matters" })
     moduleDetail.mockResolvedValue(two)
     renderPlayer()
     await screen.findByText("Security Awareness Training")
     await userEvent.click(screen.getByRole("button", { name: /Play narration/ }))
-    tick(30_000)
+    await started()
+    recording.seek(30)
+    tick(100)
+    expect(screen.getByRole("progressbar", { name: "Narration progress" }))
+      .toHaveAttribute("aria-valuenow", "30")
+
+    // Heard to the end, which is the only thing that opens the way on.
+    fireEvent.ended(document.querySelector("audio")!)
     await userEvent.click(screen.getByRole("button", { name: "Next slide" }))
 
     expect(screen.getByRole("progressbar", { name: "Narration progress" }))
       .toHaveAttribute("aria-valuenow", "0")
-
-    // Stepping while the narration is playing hands the voice to the new
-    // slide after a beat, so the course keeps talking rather than stopping
-    // whenever somebody skips ahead. Waiting for it asserts that, and leaves
-    // nothing of this test still running inside the next one.
-    await screen.findByRole("button", { name: "Pause" })
   })
 
   it("follows the recording rather than the estimate, when there is one",
@@ -485,16 +485,44 @@ describe("moving between slides", () => {
     expect(screen.getByText("Slide 2")).toBeInTheDocument()
   })
 
-  it("starts from the progress already recorded", async () => {
-    // Somebody half way through a course they began before any of this
-    // existed must not be made to start again.
-    const half = course()
-    half.enrolment = { started_at: null, completed_at: null,
-                       furthest_ordinal: 3 }
-    moduleDetail.mockResolvedValue(half)
+  it("is not opened by how far somebody got before", async () => {
+    // Progress is recorded on ARRIVAL at a slide, so it says where somebody
+    // has been. Being somewhere is exactly what this is meant to stop
+    // counting — seeding the gate from it let anybody who had once clicked
+    // through the deck click through it again.
+    const before = course()
+    before.enrolment = { started_at: null, completed_at: null,
+                         furthest_ordinal: 3 }
+    moduleDetail.mockResolvedValue(before)
     renderPlayer()
     await screen.findByText("Slide 1")
 
+    expect(nextSlide()).toBeDisabled()
+  })
+
+  it("does not make somebody who goes back listen twice", async () => {
+    // Every slide between where they went back to and where they were is one
+    // they have already heard, so walking forward again costs nothing. A
+    // course that charged for it would teach people to leave it playing to
+    // itself, which is the behaviour the gate exists to prevent.
+    moduleDetail.mockResolvedValue(course())
+    renderPlayer()
+    await screen.findByText("Slide 1")
+    await stopAdvancingAutomatically()
+
+    fireEvent.ended(document.querySelector("audio")!)
+    await userEvent.click(nextSlide())
+    await screen.findByText("Slide 2")
+    fireEvent.ended(document.querySelector("audio")!)
+    await userEvent.click(nextSlide())
+    await screen.findByText("Slide 3")
+
+    await userEvent.click(previous())
+    await userEvent.click(previous())
+    await screen.findByText("Slide 1")
+    expect(nextSlide()).toBeEnabled()
+    await userEvent.click(nextSlide())
+    expect(screen.getByText("Slide 2")).toBeInTheDocument()
     expect(nextSlide()).toBeEnabled()
   })
 
