@@ -149,9 +149,9 @@ code {
 
       <h1>Security Awareness Training</h1>
       <p class="lede">
-        Twenty minutes, narrated, and a short knowledge check at the end.
-        You can stop whenever you like — it brings you back to the slide you
-        left.
+        {% if minutes %}About {{ minutes }} minutes, narrated,{% else %}
+        Narrated,{% endif %} with a short knowledge check at the end. You can
+        stop whenever you like — it brings you back to the slide you left.
       </p>
 
       {% if configured %}
@@ -193,7 +193,7 @@ code {
          alt="Be Aware. Be Secure — Security Awareness Training Portal">
     <p>
       Most attacks reach an organisation through a person, not a firewall.
-      This is the twenty minutes that makes that harder.
+      This is the training that makes that harder.
     </p>
   </div>
 

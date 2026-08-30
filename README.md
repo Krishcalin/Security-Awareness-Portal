@@ -91,8 +91,8 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 145, needs the database from docker compose
-cd frontend && npm test         # 31
+python -m pytest                # 151, needs the database from docker compose
+cd frontend && npm test         # 70
 ```
 
 ---
@@ -127,6 +127,26 @@ and all four are handled in [`frontend/src/narration.ts`](frontend/src/narration
 voices that load asynchronously, Chrome stopping after fifteen seconds,
 `cancel()` firing `end` in some browsers and not others, and speech needing a
 user gesture.
+
+**The narration is spoken a sentence at a time**, with real silence between.
+Handed a whole slide, the engines run sentences together: a full stop gets no
+more silence than a comma and the first word of the next sentence lands before
+the listener has finished the last one, so it is heard as a stumble or not
+heard at all. Nothing in the markup fixes this — SSML `<break>` is ignored by
+the Web Speech API, and padding with spaces or commas either does nothing or
+gets read aloud. The only thing that reliably produces silence is silence.
+
+So the text is split on its own punctuation and each piece spoken as its own
+utterance: 350ms after a full stop, 200ms after a colon, 650ms between
+paragraphs. Those pauses are part of how long a slide takes, so the build
+counts them — the course went from a reported nineteen minutes to a truthful
+twenty-one the moment they were added.
+
+The splitter is deliberately simple, because the script is: British prose with
+no abbreviations, no decimals and no ellipses. A test fails if any of those
+ever appear, rather than letting "e.g." quietly become two sentences with a
+pause in the middle. Another runs the splitter over all twenty slides and
+checks the pieces add back up to exactly the script.
 
 On a machine with no voices installed the player **says so** and shows the
 script. The transcript is on screen throughout regardless, and the word being

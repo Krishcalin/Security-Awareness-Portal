@@ -425,3 +425,27 @@ def test_an_error_from_microsoft_cannot_inject_script(clean, microsoft):
     assert page.status_code == 403
     assert "<script>alert(1)</script>" not in page.text
     assert "&lt;script&gt;" in page.text
+
+
+def test_the_sign_in_page_quotes_the_real_length_of_the_course(clean, microsoft):
+    """The figure moved from nineteen minutes to twenty-one the moment the
+    narration gained a pause after every full stop. A promise nobody
+    re-checked is the kind of small lie a portal accumulates."""
+    import json
+    from server import content
+    microsoft()
+    page = clean.get("/auth/login", follow_redirects=False).text
+    minutes = sum(m["minutes"] for m in content.load_modules())
+    assert "About %d minutes" % minutes in page
+
+
+def test_the_sign_in_page_renders_even_if_the_content_will_not_load(
+        clean, microsoft, monkeypatch, tmp_path):
+    """It is the screen somebody is looking at when nothing else works."""
+    from server.config import settings
+    microsoft()
+    monkeypatch.setattr(settings, "content_dir", tmp_path / "nothing-here")
+    page = clean.get("/auth/login", follow_redirects=False)
+    assert page.status_code == 200
+    assert "Sign in with Microsoft" in page.text
+    assert "About 0 minutes" not in page.text

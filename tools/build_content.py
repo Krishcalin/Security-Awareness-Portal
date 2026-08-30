@@ -52,6 +52,19 @@ VERIFIED_PAIRINGS = {
 #: committing to before they press play.
 WORDS_PER_MINUTE = 150
 
+#: The narration is spoken a sentence at a time with real silence between, so
+#: that the first word after a full stop is not lost under the last word of the
+#: sentence before it. That silence is part of how long a slide takes, and a
+#: word count alone now understates every slide by several seconds.
+#:
+#: These MUST match `PAUSE` in frontend/src/narration.ts, which is where the
+#: silence actually happens. A test fails if they drift apart.
+PAUSE_MS = {
+    "sentence": 350,     # . ? !
+    "clause": 200,       # : ;
+    "paragraph": 650,    # a blank line in the script
+}
+
 def parse_scripts() -> dict:
     """{slide number: (title, narration)} from the authored markdown."""
     md = SCRIPT.read_text(encoding="utf-8")
@@ -94,6 +107,29 @@ def normalise(text: str) -> set:
     # slug "passwords". Crude on purpose: anything cleverer would need a
     # dependency, and the exceptions are named above rather than guessed at.
     return {w.rstrip("s") for w in words if w not in stop and len(w) > 2}
+
+
+#: Sentence endings, and the paragraph break that outranks them. Kept simple
+#: because the material is: `test_no_abbreviation_would_split_a_sentence`
+#: fails if anything appears in the script that this would mis-split.
+_BOUNDARY = re.compile(r"([.!?]+|[:;])(\s+|$)")
+
+
+def pause_seconds(text: str) -> float:
+    """How much silence the player will introduce into this narration.
+
+    Mirrors `segment()` in frontend/src/narration.ts. The last pause is never
+    waited out, because the narration is over by then.
+    """
+    pauses = []
+    for terminator, gap in _BOUNDARY.findall(text):
+        if re.search(r"\n\s*\n", gap):
+            pauses.append(PAUSE_MS["paragraph"])
+        elif terminator[0] in ".!?":
+            pauses.append(PAUSE_MS["sentence"])
+        else:
+            pauses.append(PAUSE_MS["clause"])
+    return sum(pauses[:-1]) / 1000 if pauses else 0.0
 
 
 def opening(option: str) -> str:
@@ -216,12 +252,17 @@ def build() -> dict:
             if not paired and number not in VERIFIED_PAIRINGS:
                 mismatched.append((number, title, slug))
         words = len(narration.split())
+        spoken = words / WORDS_PER_MINUTE * 60 if words else 0
         lessons.append({
             "ordinal": number,
             "title": title or slug.replace("-", " ").title(),
             "image": "slides/" + filename,
             "narration": narration,
-            "narration_seconds": round(words / WORDS_PER_MINUTE * 60) if words else 0,
+            # Speech plus the silence between sentences. Reporting only the
+            # words would tell a learner the course is two minutes shorter
+            # than it is, every time.
+            "narration_seconds": round(spoken + pause_seconds(narration))
+                                 if words else 0,
             "silent_because": INTENTIONALLY_SILENT.get(number, ""),
         })
 

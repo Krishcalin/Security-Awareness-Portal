@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { Narrator, loadVoices, pickVoice, speechSupported } from "./narration"
+import {
+  Narrator, PAUSE, loadVoices, pauseSeconds, pickVoice, segment,
+  speechSupported,
+} from "./narration"
 import { installFakeSpeech } from "./test/speech"
 
 afterEach(() => {
@@ -171,5 +174,147 @@ describe("speaking", () => {
     expect(fake.spoken[0].voice.name).toBe("Daniel")
     expect(fake.spoken[0].lang).toBe("en-GB")
     expect(narrator.voiceName).toBe("Daniel")
+  })
+})
+
+
+describe("splitting the narration for delivery", () => {
+  it("keeps each sentence with its full stop", () => {
+    const parts = segment("One thing. Then another. And a third.")
+    expect(parts.map((p) => p.text)).toEqual([
+      "One thing.", "Then another.", "And a third.",
+    ])
+  })
+
+  it("waits after a full stop, which is the whole point", () => {
+    const parts = segment("One thing. Then another.")
+    expect(parts[0].pauseAfter).toBe(PAUSE.sentence)
+  })
+
+  it("waits longer between paragraphs than between sentences", () => {
+    const parts = segment("End of one.\n\nStart of the next. And on.")
+    expect(parts[0].pauseAfter).toBe(PAUSE.paragraph)
+    expect(parts[1].pauseAfter).toBe(PAUSE.sentence)
+  })
+
+  it("takes a shorter breath after a colon", () => {
+    const parts = segment("One: disconnect from the network. Two: report it.")
+    expect(parts[0].text).toBe("One:")
+    expect(parts[0].pauseAfter).toBe(PAUSE.clause)
+    expect(PAUSE.clause).toBeLessThan(PAUSE.sentence)
+  })
+
+  it("treats a question the same as a statement", () => {
+    const parts = segment("What does the padlock tell you? Not very much.")
+    expect(parts[0].text).toBe("What does the padlock tell you?")
+    expect(parts[0].pauseAfter).toBe(PAUSE.sentence)
+  })
+
+  it("does not drop a sentence nobody ended", () => {
+    const parts = segment("A proper sentence. An unfinished one")
+    expect(parts.map((p) => p.text)).toEqual([
+      "A proper sentence.", "An unfinished one",
+    ])
+  })
+
+  it("says nothing at all about nothing at all", () => {
+    expect(segment("   ")).toEqual([])
+  })
+
+  it("reports where each piece came from, for the transcript", () => {
+    const text = "One thing. Then another."
+    for (const part of segment(text)) {
+      expect(text.slice(part.start, part.start + part.text.length))
+        .toBe(part.text)
+    }
+  })
+
+  it("adds up the silence it will introduce", () => {
+    // Three sentences, two gaps: the pause after the last one is never waited.
+    const seconds = pauseSeconds("One. Two. Three.")
+    expect(seconds).toBeCloseTo(PAUSE.sentence * 2 / 1000, 5)
+  })
+})
+
+describe("speaking a whole slide", () => {
+  let fake: ReturnType<typeof installFakeSpeech>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    fake = installFakeSpeech()
+  })
+
+  async function narrator() {
+    const n = new Narrator()
+    await n.prepare()
+    return n
+  }
+
+  it("speaks one sentence, then waits, then speaks the next", async () => {
+    const n = await narrator()
+    n.speak("First sentence. Second sentence.")
+
+    expect(fake.spoken.map((u) => u.text)).toEqual(["First sentence."])
+    fake.spoken[0].onend()
+
+    // Still silent: the gap has not elapsed.
+    expect(fake.spoken).toHaveLength(1)
+    vi.advanceTimersByTime(PAUSE.sentence)
+    expect(fake.spoken.map((u) => u.text))
+      .toEqual(["First sentence.", "Second sentence."])
+  })
+
+  it("does not report the end until the last sentence is said", async () => {
+    const n = await narrator()
+    const onEnd = vi.fn()
+    n.speak("First. Second.", { onEnd })
+
+    fake.spoken[0].onend()
+    expect(onEnd).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(PAUSE.sentence)
+    fake.spoken[1].onend()
+    expect(onEnd).toHaveBeenCalledTimes(1)
+  })
+
+  it("stops mid-slide without the next sentence arriving anyway", async () => {
+    const n = await narrator()
+    n.speak("First. Second.")
+    fake.spoken[0].onend()
+    n.stop()
+    vi.advanceTimersByTime(PAUSE.sentence * 10)
+    expect(fake.spoken).toHaveLength(1)
+  })
+
+  it("can be paused during the silence between two sentences", async () => {
+    // There is nothing for the synthesiser to pause at that moment, so the
+    // next sentence has to be held rather than allowed to start.
+    const n = await narrator()
+    n.speak("First. Second.")
+    fake.spoken[0].onend()
+    n.pause()
+    expect(n.currentStatus).toBe("paused")
+
+    vi.advanceTimersByTime(PAUSE.sentence * 10)
+    expect(fake.spoken).toHaveLength(1)
+
+    n.resume()
+    expect(fake.spoken.map((u) => u.text)).toEqual(["First.", "Second."])
+  })
+
+  it("follows the transcript through the whole slide, not each sentence", async () => {
+    const n = await narrator()
+    const onWord = vi.fn()
+    const text = "First sentence. Second sentence."
+    n.speak(text, { onWord })
+
+    fake.spoken[0].onboundary({ name: "word", charIndex: 6 })
+    expect(onWord).toHaveBeenLastCalledWith(6)
+
+    fake.spoken[0].onend()
+    vi.advanceTimersByTime(PAUSE.sentence)
+    // "sentence" inside the SECOND utterance is at index 7 of that utterance,
+    // and at 24 of the slide. The transcript needs the second number.
+    fake.spoken[1].onboundary({ name: "word", charIndex: 7 })
+    expect(onWord).toHaveBeenLastCalledWith(text.indexOf("Second") + 7)
   })
 })

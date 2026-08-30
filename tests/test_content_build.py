@@ -12,12 +12,20 @@ build refuses it. A guard nobody has watched fail is not a guard.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 import tools.build_content as bc
 
+ROOT = Path(__file__).resolve().parents[1]
 SLIDES = set(range(1, 22))
+
+
+@pytest.fixture(scope="module")
+def module_json() -> dict:
+    """The built course, as committed."""
+    return json.loads(bc.OUTPUT.read_text(encoding="utf-8"))
 
 
 @pytest.fixture
@@ -213,3 +221,61 @@ def test_verified_pairings_each_carry_a_reason():
         assert len(reason) > 20, "pairing %d has no real reason" % number
     for number, reason in bc.INTENTIONALLY_SILENT.items():
         assert len(reason) > 20, "slide %d has no real reason" % number
+
+
+# --------------------------------------------------------------------------
+# The silence between sentences
+# --------------------------------------------------------------------------
+
+def test_the_pause_lengths_match_the_ones_the_player_uses():
+    """The silence happens in the browser and is counted here. Two copies of
+    the same number is one copy too many, so this fails when they drift."""
+    import re
+    source = (ROOT / "frontend" / "src" / "narration.ts").read_text(
+        encoding="utf-8")
+    block = re.search(r"export const PAUSE = \{(.*?)\n\}", source, re.S).group(1)
+    in_player = {name: int(value)
+                 for name, value in re.findall(r"(\w+):\s*(\d+),", block)}
+    assert in_player == bc.PAUSE_MS
+
+
+def test_a_slide_is_reported_as_longer_than_its_words_alone(module_json):
+    """Reporting only the word count tells a learner the course is two
+    minutes shorter than it is, every time they look at it."""
+    for lesson in module_json["lessons"]:
+        if not lesson["narration"]:
+            continue
+        words = len(lesson["narration"].split())
+        spoken = words / bc.WORDS_PER_MINUTE * 60
+        assert lesson["narration_seconds"] > spoken
+        assert lesson["narration_seconds"] == round(
+            spoken + bc.pause_seconds(lesson["narration"]))
+
+
+def test_the_silence_is_not_waited_out_after_the_last_sentence():
+    assert bc.pause_seconds("One. Two. Three.") == pytest.approx(
+        bc.PAUSE_MS["sentence"] * 2 / 1000)
+    assert bc.pause_seconds("Only one sentence.") == 0
+
+
+def test_nothing_in_the_script_would_be_mis_split_into_two_sentences(module_json):
+    """The splitter is deliberately simple because the material is: British
+    prose with no abbreviations, no decimals and no ellipses. If any appear,
+    "e.g." becomes two sentences with a pause in the middle — so this fails
+    rather than the narration quietly developing a stutter."""
+    import re
+    hazards = {
+        "an abbreviation": r"\b(?:[A-Za-z]\.){2,}|\b(?:Mr|Mrs|Ms|Dr|Prof|St|"
+                           r"etc|eg|ie|vs|approx|No)\.",
+        "a decimal number": r"\d\.\d",
+        "an ellipsis": r"\.\.\.|…",
+        # A full stop followed by a lower-case letter is either an
+        # abbreviation or a typo; both read badly once there is a pause there.
+        "a full stop mid-sentence": r"\.\s+[a-z]",
+    }
+    for lesson in module_json["lessons"]:
+        for description, pattern in hazards.items():
+            found = re.findall(pattern, lesson["narration"])
+            assert not found, ("slide %d contains %s (%r), which the sentence "
+                               "splitter would get wrong"
+                               % (lesson["ordinal"], description, found[:3]))

@@ -104,3 +104,11 @@ def test_the_brand_tool_the_readme_names_exists_and_runs():
     from tools import build_brand_assets
     assert "tools/build_brand_assets.py" in README
     assert build_brand_assets.main(["--check"]) == 0
+
+
+def test_the_pause_lengths_in_the_readme_are_the_ones_in_the_code():
+    """Three numbers a reader would quote back at you."""
+    import tools.build_content as bc
+    assert "%dms after a full stop" % bc.PAUSE_MS["sentence"] in README
+    assert "%dms after a colon" % bc.PAUSE_MS["clause"] in README
+    assert "%dms between" % bc.PAUSE_MS["paragraph"] in README
