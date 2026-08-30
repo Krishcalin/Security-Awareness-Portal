@@ -1,0 +1,70 @@
+"""The README's figures, checked against the code.
+
+Every number in a README is a claim, and claims go stale silently — nobody
+opens a README to check whether it still describes the thing. These are the
+ones a reader would act on, so they are asserted rather than trusted.
+"""
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+import tools.build_content as bc
+
+ROOT = Path(__file__).resolve().parents[1]
+README = (ROOT / "README.md").read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def module_json():
+    return json.loads(bc.OUTPUT.read_text(encoding="utf-8"))
+
+
+def test_the_slide_count_is_right(module_json):
+    assert "Twenty-one slides" in README
+    assert len(module_json["lessons"]) == 21
+
+
+def test_the_question_count_is_right(module_json):
+    assert "twelve-question knowledge check" in README
+    assert len(module_json["questions"]) == 12
+
+
+def test_the_artwork_count_matches_the_slides(module_json):
+    assert len(list((ROOT / "assets" / "slides").glob("*.png"))) == \
+        len(module_json["lessons"])
+
+
+def test_the_database_port_matches_the_compose_file():
+    """Someone follows these two lines in order; a mismatch stops them on the
+    first command they run."""
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    port = re.search(r'"(\d+):5432"', compose).group(1)
+    assert "Postgres on %s" % port in README
+    assert port in (ROOT / ".env.example").read_text(encoding="utf-8")
+
+
+def test_the_allowlist_is_the_size_the_readme_says():
+    from server.content import QUESTION_FIELDS_BEFORE_ANSWER
+    assert "allowlist of three fields" in README
+    assert len(QUESTION_FIELDS_BEFORE_ANSWER) == 3
+
+
+def test_the_narration_failure_modes_are_all_still_handled():
+    """The README says four, and names them. If one is removed from the
+    narration module the README is describing something that is no longer
+    there."""
+    narration = (ROOT / "frontend" / "src" / "narration.ts").read_text(
+        encoding="utf-8")
+    assert "four failure modes" in README
+    for handled in ("voiceschanged", "KEEPALIVE_MS", "mine !== this.token",
+                    "user gesture"):
+        assert handled in narration, handled
+
+
+def test_every_file_the_readme_links_to_exists():
+    for link in re.findall(r"\]\(([^)#:]+)\)", README):
+        assert (ROOT / link).exists(), link
