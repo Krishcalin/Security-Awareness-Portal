@@ -24,6 +24,17 @@ recording.
 > official statement. A portal that issues a compliance certificate is a
 > poor place to state something unverified as fact.
 
+> SLIDE 31 WAS TRANSCRIBED, NOT AUTHORED. Every other section here was written
+> first and recorded afterwards. This one arrived the other way round: the
+> recording was supplied and these words were transcribed back off it, then
+> checked against the audio by the same alignment the importer uses. It agrees
+> with the recording as closely as the authored sections do with theirs. Should
+> the two ever be edited apart, the recording is the original.
+>
+> It also states the pass mark in prose — "seven or more" out of ten. That is
+> `PASS_MARK` × `quiz_length` at the time of recording. Change either setting
+> and this recording is telling learners something that is no longer true.
+
 ---
 
 ## Slide 1 — Security Awareness Training
@@ -507,5 +518,29 @@ And report anything suspicious immediately, even, and especially, when you think
 None of this requires you to become a security expert. It asks for a few seconds of attention at the right moments, and the confidence to ask a question when something feels off.
 
 You now have both. Thank you for your time — and welcome to the team that keeps this organisation secure.
+
+---
+
+## Slide 31 — Quiz Prompt
+
+That's the end of the training. Before you go, let's find out what stayed
+with you.
+
+What follows is a short assessment: ten questions drawn from everything we've
+covered across both parts of this programme. Each question has one correct
+answer. There's no time limit, so read each one properly before you choose.
+
+Get seven or more right and you pass, and your certificate is issued straight
+away. Score under seven and you're welcome to try again. That's all that
+happens, nothing else changes. Your completion of this training is already
+recorded, and the awareness requirement is met either way. The certificate is
+the extra step, not the whole point, so there's nothing to be nervous about.
+
+This isn't a memory test. It's a check on whether the habits we've talked
+about will be there when you actually need them: the pause before the click,
+the second look at the sender, the phone call you make rather than the one
+you take.
+
+Take your time, read carefully, and good luck.
 
 ---

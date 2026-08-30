@@ -1,4 +1,6 @@
-import { act, render, screen, waitFor } from "@testing-library/react"
+import {
+  act, cleanup, fireEvent, render, screen, waitFor,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -47,6 +49,18 @@ function transcriptShown(): boolean {
  * approximate.
  */
 function driveFrames() {
+  // Unmount whatever the last test rendered, before anything below replaces
+  // the animation frame.
+  //
+  // A player left mounted keeps its own loop going, and it re-registers
+  // through the stub installed here: the frame this test then runs belongs to
+  // the previous test's component, which has no recording and believes it is
+  // still speaking. The bar under test never moves, and the failure looks
+  // like a bug in the player rather than in the harness. Cleanup normally
+  // happens after the test; here it has to happen before the next one starts
+  // rewiring the world.
+  cleanup()
+
   let pending: FrameRequestCallback | null = null
   let clockMs = 0
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
@@ -59,6 +73,21 @@ function driveFrames() {
   vi.spyOn(performance, "now").mockImplementation(() => clockMs)
 
   return {
+    /**
+     * Wait until the player has actually asked for a frame.
+     *
+     * A recording starts the loop inside the resolution of play(), a
+     * microtask after the click. Ticking before that means ticking an empty
+     * loop, and the assertion that follows fails for a reason that has
+     * nothing to do with what it is testing.
+     */
+    async started(within = 1000) {
+      const until = Date.now() + within
+      while (pending === null) {
+        if (Date.now() > until) throw new Error("the frame loop never started")
+        await new Promise((resolve) => setTimeout(resolve, 5))
+      }
+    },
     tick(ms: number, steps = 8) {
       // The loop accumulates the delta between frames, so a handful of large
       // steps sums to the same elapsed time as hundreds of small ones — and
@@ -69,6 +98,41 @@ function driveFrames() {
         pending = null
         if (frame) act(() => frame(clockMs))
       }
+    },
+  }
+}
+
+/**
+ * A playable <audio> element, which jsdom does not provide.
+ *
+ * Every slide in the built course now has a recording, so this is the path
+ * learners actually take; the synthesiser is the fallback. jsdom's
+ * HTMLMediaElement throws on play() and reports duration as NaN, so the
+ * properties the player reads are defined here and the test moves the
+ * playhead itself.
+ */
+function fakeRecording(seconds: number) {
+  let currentTime = 0
+  let paused = true
+  const define = (name: string, descriptor: PropertyDescriptor) =>
+    Object.defineProperty(HTMLMediaElement.prototype, name,
+                          { configurable: true, ...descriptor })
+  define("duration", { get: () => seconds })
+  define("paused", { get: () => paused })
+  define("ended", { get: () => currentTime >= seconds })
+  define("currentTime", { get: () => currentTime,
+                          set: (value: number) => { currentTime = value } })
+  HTMLMediaElement.prototype.play = vi.fn(() => { paused = false
+                                                  return Promise.resolve() })
+  HTMLMediaElement.prototype.pause = vi.fn(() => { paused = true })
+  return {
+    seek: (to: number) => { currentTime = to },
+    // What the media keys and the notification-area controls do: the element
+    // stops and starts without the page being asked.
+    pauseOutside: () => { paused = true },
+    resumeOutside: (element: HTMLMediaElement) => {
+      paused = false
+      fireEvent.play(element)
     },
   }
 }
@@ -223,6 +287,70 @@ describe("the narration progress bar", () => {
 
     expect(screen.getByRole("progressbar", { name: "Narration progress" }))
       .toHaveAttribute("aria-valuenow", "0")
+
+    // Stepping while the narration is playing hands the voice to the new
+    // slide after a beat, so the course keeps talking rather than stopping
+    // whenever somebody skips ahead. Waiting for it asserts that, and leaves
+    // nothing of this test still running inside the next one.
+    await screen.findByRole("button", { name: "Pause" })
+  })
+
+  it("follows the recording rather than the estimate, when there is one",
+     async () => {
+    // Two different numbers deliberately: the word count says this slide runs
+    // a minute, the file runs two. The bar and the clock must both come from
+    // the file, because that is the thing the learner is actually hearing.
+    const { started, tick } = driveFrames()
+    const recording = fakeRecording(120)
+    moduleDetail.mockResolvedValue(detail({
+      audio_url: "narration/essentials/01.mp3", narration_seconds: 60,
+    }))
+    renderPlayer()
+    await screen.findByText("Security Awareness Training")
+
+    fireEvent.loadedMetadata(document.querySelector("audio")!)
+    expect(screen.getByText("0:00 / 2:00")).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole("button", { name: /Play narration/ }))
+    await started()
+    recording.seek(30)
+    tick(100)
+
+    const bar = screen.getByRole("progressbar", { name: "Narration progress" })
+    expect(bar).toHaveAttribute("aria-valuenow", "25")
+    expect(screen.getByText("0:30 / 2:00")).toBeInTheDocument()
+  })
+
+  it("picks the recording back up when the media keys restart it", async () => {
+    // Nothing tells the page that a headset button paused the audio, so the
+    // frame loop simply finds the element stopped and ends. It has to be able
+    // to start again when the audio does, or the bar stays frozen for the rest
+    // of the slide while the voice carries on.
+    const { started, tick } = driveFrames()
+    const recording = fakeRecording(120)
+    moduleDetail.mockResolvedValue(detail({
+      audio_url: "narration/essentials/01.mp3", narration_seconds: 120,
+    }))
+    renderPlayer()
+    await screen.findByText("Security Awareness Training")
+    const element = document.querySelector("audio")!
+    fireEvent.loadedMetadata(element)
+
+    await userEvent.click(screen.getByRole("button", { name: /Play narration/ }))
+    await started()
+    recording.seek(30)
+    tick(100)
+    const bar = screen.getByRole("progressbar", { name: "Narration progress" })
+    expect(bar).toHaveAttribute("aria-valuenow", "25")
+
+    recording.pauseOutside()
+    tick(100)                          // the loop finds it stopped, and ends
+
+    act(() => recording.resumeOutside(element))
+    recording.seek(60)
+    await started()
+    tick(100)
+    expect(bar).toHaveAttribute("aria-valuenow", "50")
   })
 
   it("is not drawn on a slide with nothing to narrate", async () => {

@@ -215,6 +215,18 @@ def test_mismatched_titles_are_refused(monkeypatch):
     assert "share no word" in str(exit_info.value)
 
 
+def test_a_slide_cannot_be_both_narrated_and_deliberately_silent(monkeypatch):
+    """Slide 31 was listed as intentionally silent until a recording of it
+    arrived. Had the entry stayed, the slide would have spoken while still
+    carrying a reason it does not \u2014 a contradiction with nothing to notice it.
+    """
+    monkeypatch.setattr(bc, "INTENTIONALLY_SILENT", {3: "a reason that is long enough"})
+    with pytest.raises(SystemExit) as exit_info:
+        bc.build()
+    assert "INTENTIONALLY_SILENT" in str(exit_info.value)
+    assert "[3]" in str(exit_info.value)
+
+
 def test_verified_pairings_each_carry_a_reason():
     """The allowlist exists so a pairing nobody checked still fails. An entry
     with no reason is indistinguishable from one added to silence the guard."""

@@ -34,13 +34,14 @@ Thumbs.db
 
 # Recorded narration.
 #
-# Nothing here is committed yet, so every deployment currently falls back to
-# the browser's synthesiser. The `sapi` backend writes 52MB of WAV purely to
-# prove the pipeline locally, and that should never be committed.
+# The real recordings now exist — 31 files, 51 minutes, 48MB — and they ARE the
+# deployment artefact rather than a build output. They belong in the
+# repository, and they are still excluded here because 48MB of binary in plain
+# git is a decision to take on purpose: Git LFS is the way to take it, and it
+# has not been set up yet.
 #
-# WHEN REAL RECORDINGS ARE MADE (tools/build_narration.py --backend azure),
-# the mp3 files, their word tracks and manifest.json ARE the deployment
-# artefact and belong in the repository — about 10MB, which is the point at
-# which Git LFS stops being optional. Relax this rule then.
+# WHAT THIS COSTS UNTIL THEN. A fresh clone has no narration and every slide
+# falls back to the browser voice. `python -m tools.import_narration --check`
+# reports it and exits non-zero. Relax this rule once LFS is in place.
 assets/narration/*
 !assets/narration/README.md

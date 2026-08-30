@@ -3,8 +3,8 @@
   "title": "Security Awareness Essentials",
   "summary": "How attackers actually reach people, what those attempts look like, and the habits that stop them. No jargon, no technical background needed.",
   "topic": "general",
-  "minutes": 46,
-  "narration_seconds": 2753,
+  "minutes": 47,
+  "narration_seconds": 2827,
   "lessons": [
     {
       "ordinal": 1,
@@ -250,9 +250,9 @@
       "ordinal": 31,
       "title": "Quiz Prompt",
       "image": "slides/31-quiz-prompt.png",
-      "narration": "",
-      "narration_seconds": 0,
-      "silent_because": "the knowledge-check gate: a prompt to begin, not material to teach"
+      "narration": "That's the end of the training. Before you go, let's find out what stayed\nwith you.\n\nWhat follows is a short assessment: ten questions drawn from everything we've\ncovered across both parts of this programme. Each question has one correct\nanswer. There's no time limit, so read each one properly before you choose.\n\nGet seven or more right and you pass, and your certificate is issued straight\naway. Score under seven and you're welcome to try again. That's all that\nhappens, nothing else changes. Your completion of this training is already\nrecorded, and the awareness requirement is met either way. The certificate is\nthe extra step, not the whole point, so there's nothing to be nervous about.\n\nThis isn't a memory test. It's a check on whether the habits we've talked\nabout will be there when you actually need them: the pause before the click,\nthe second look at the sender, the phone call you make rather than the one\nyou take.\n\nTake your time, read carefully, and good luck.",
+      "narration_seconds": 74,
+      "silent_because": ""
     }
   ],
   "questions": [
@@ -1557,5 +1557,5 @@
       "explains": "Especially then. Early reporting turns a potential crisis into a routine event, and nobody is punished for speaking up."
     }
   ],
-  "content_hash": "1806855d16797fbb"
+  "content_hash": "347ca9342dbc80f8"
 }

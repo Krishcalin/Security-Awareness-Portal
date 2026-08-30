@@ -100,8 +100,8 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 213, needs the database from docker compose
-cd frontend && npm test         # 110
+python -m pytest                # 214, needs the database from docker compose
+cd frontend && npm test         # 113
 ```
 
 ---
@@ -135,8 +135,9 @@ clips the opening of every utterance on Chrome for Windows, and it means no
 two employees hear the same course, which is a strange property for something
 that issues a certificate.
 
-Recordings are **supplied**, not generated here. Drop the audio for a module
-into `assets/narration/<module-slug>/` and run the importer:
+All thirty-one slides are recorded — fifty-one minutes of narration, one file
+per slide. Recordings are **supplied**, not generated here. Drop the audio for
+a module into `assets/narration/<module-slug>/` and run the importer:
 
 ```bash
 python -m tools.import_narration          # match, measure and record
@@ -155,6 +156,14 @@ pipeline was proved before any real audio existed. It refuses to run over
 supplied recordings without `--force`, because replacing a real voice with a
 machine one is the sort of thing only discovered by listening to the whole
 course again.
+
+**The audio is not in the repository.** Fifty-one minutes of mp3 is 48MB,
+which is past the point where Git LFS stops being optional, and that decision
+has not been taken yet — so `assets/narration/*` stays ignored. A container
+built from a working tree that has the files has the narration; a fresh clone
+does not, and every slide falls back to the browser voice. `python -m
+tools.import_narration --check` exits non-zero when a module is missing audio,
+which is the check to run before a deployment rather than after one.
 
 Which recordings a deployment holds is **not part of the course**: the same
 content JSON is loaded by a server that has the audio and by one that does
@@ -195,6 +204,13 @@ knows its own position exactly. The browser synthesiser reports none at all, so
 there the bar is driven from time spoken against the slide's estimated
 length — honest enough for a bar, which is why the figure beside it is the
 recording's own whenever there is one.
+
+**The bar recovers when the audio is started from outside the page.** Media
+keys, a headset button and the notification-area controls all start and stop
+the element without the page being asked, so the loop that drives the bar
+cannot only be started where the play button is handled — it also starts on the
+element's own `play`, and releases its frame handle whenever it stops, or it
+could never be started a second time.
 
 **The transcript is off by default.** The course is meant to be listened to,
 and a wall of text beside the voice invites people to read ahead instead of
@@ -481,7 +497,10 @@ scores better than attempting it.
 **Content that cannot be paired is not built.** Every slide must have a script
 and every script a slide; a slide deliberately without narration has to be
 named, with a reason, so silence is a decision rather than an omission nobody
-noticed. The knowledge check is refused if an answer key points past the end of
+noticed — and a slide that is named there and then given a script is refused
+too, because the reason it does not speak has outlived the slide not speaking.
+The last slide, the knowledge-check gate, was silent by that mechanism until a
+recording of it was supplied. The knowledge check is refused if an answer key points past the end of
 its options, if a question names a slide that does not exist, if one option
 position holds most of the answers, or if the three wrong options are phrased
 alike and the right one is not — all of which let somebody score without

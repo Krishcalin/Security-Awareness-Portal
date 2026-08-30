@@ -25,9 +25,12 @@ const narrated: Lesson[] = course.lessons.filter((l: Lesson) => l.narration)
 
 describe("the authored narration", () => {
   it("has slides to say something about", () => {
-    // Thirty-one slides, thirty narrated: the quiz gate is deliberately silent.
+    // Every slide speaks. The quiz gate was deliberately silent until a
+    // recording of it was supplied; the build refuses a slide that is silent
+    // for no recorded reason, so this staying at 31 is the check that the
+    // deck and the scripts are still the same length.
     expect(course.lessons.length).toBe(31)
-    expect(narrated.length).toBe(30)
+    expect(narrated.length).toBe(31)
   })
 
   // One test per slide, so a failure names the slide rather than the loop.

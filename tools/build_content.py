@@ -33,9 +33,12 @@ OUTPUT = ROOT / "data" / "modules" / "security-awareness-essentials.json"
 #: Slides that carry no narration, and why. Named so that a missing script is
 #: a decision rather than an omission — the check below fails on any OTHER
 #: unnarrated slide.
-INTENTIONALLY_SILENT = {
-    31: "the knowledge-check gate: a prompt to begin, not material to teach",
-}
+#: Slides with artwork and no narration. Empty, and kept: a slide that says
+#: nothing should be a decision somebody wrote down, not an omission nobody
+#: noticed, and the guard in `build()` needs somewhere to look. Slide 31 was
+#: here — the knowledge-check gate, a prompt to begin rather than material to
+#: teach — until a recording of it was supplied.
+INTENTIONALLY_SILENT: dict[int, str] = {}
 
 #: Pairings where the script title and the artwork slug legitimately share no
 #: word, confirmed by looking at the slide. Named individually so the guard
@@ -272,6 +275,16 @@ def build() -> dict:
             "narration exists for slide(s) %s with no artwork. Refusing to "
             "build: the deck would be narrated out of step from that point on."
             % missing_art)
+
+    # A slide cannot be both narrated and deliberately silent. Without this
+    # the constant just goes stale: the slide speaks, `silent_because` still
+    # says why it does not, and nothing anywhere disagrees.
+    contradicted = sorted(set(scripts) & set(INTENTIONALLY_SILENT))
+    if contradicted:
+        raise SystemExit(
+            "slide(s) %s have narration AND are listed in INTENTIONALLY_SILENT. "
+            "One of the two is out of date — remove the entry if the slide now "
+            "speaks, or the script if it should not." % contradicted)
 
     unexplained = sorted(set(slides) - set(scripts) - set(INTENTIONALLY_SILENT))
     if unexplained:

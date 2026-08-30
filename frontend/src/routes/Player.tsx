@@ -199,6 +199,11 @@ export function Player() {
         total,
       })
     } else {
+      // Nothing is speaking any more, so the loop stops here. Releasing the
+      // handle matters: `startFollowing` will not schedule anything while one
+      // is held, so a loop that ended without clearing it can never be
+      // restarted, and the bar stays at nothing for the rest of the course.
+      following.current = null
       return
     }
     lastTick.current = now
@@ -388,6 +393,15 @@ export function Player() {
           src={mediaUrl(lesson.audio_url)}
           muted={muted}
           preload="auto"
+          onPlay={() => {
+            // Playback can start without the page asking for it: a headset
+            // button, the keyboard's media keys, the notification-area
+            // controls. The frame loop is started here rather than only where
+            // the play button is handled, so the bar follows the audio however
+            // it was started \u2014 otherwise it sits frozen while the voice runs.
+            setStatus("speaking")
+            startFollowing()
+          }}
           onLoadedMetadata={(event) => {
             // The estimate on the card is the word count plus the pauses; the
             // file's own length is better, and known by now.
