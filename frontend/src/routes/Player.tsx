@@ -8,6 +8,12 @@ import { api } from "../api/client"
 import type { Lesson, ModuleDetail } from "../api/types"
 import { Narrator, type NarratorStatus } from "../narration"
 
+/** Seconds as a listener reads them. */
+function clock(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds))
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`
+}
+
 /** One word, and when it is said. Produced by tools/build_narration.py. */
 interface Mark { ms: number; at: number; len: number }
 
@@ -98,6 +104,10 @@ export function Player() {
   const [index, setIndex] = useState(0)
   const [status, setStatus] = useState<NarratorStatus>("idle")
   const [spokenAt, setSpokenAt] = useState(-1)
+  /** How far through this slide's narration, 0 to 1, and the seconds behind
+   *  it. Recorded audio and the browser synthesiser report position in
+   *  completely different ways; `advance` below is where that is reconciled. */
+  const [heard, setHeard] = useState({ fraction: 0, seconds: 0, total: 0 })
   const [muted, setMuted] = useState(false)
   const [autoAdvance, setAutoAdvance] = useState(true)
   const [reachedEnd, setReachedEnd] = useState(false)
@@ -107,6 +117,9 @@ export function Player() {
   const audio = useRef<HTMLAudioElement | null>(null)
   const marks = useRef<Mark[]>([])
   const following = useRef<number | null>(null)
+  /** Wall clock, for the synthesiser only: it has no position to ask for. */
+  const spokenMs = useRef(0)
+  const lastTick = useRef(0)
   // Read inside callbacks that outlive the render they were made in.
   const autoAdvanceNow = useRef(autoAdvance)
   autoAdvanceNow.current = autoAdvance
@@ -152,15 +165,60 @@ export function Player() {
     return () => { stale = true }
   }, [lesson])
 
-  const followRecording = useCallback(() => {
+  /**
+   * One frame of playback: the transcript position and the progress bar.
+   *
+   * The two sources of truth are not alike. A recording knows exactly where it
+   * is and how long it runs, so the bar is exact. The browser synthesiser
+   * exposes no position at all — so time spoken is accumulated here and
+   * measured against the slide's estimated length, which is an estimate
+   * running against an estimate. It is honest enough for a bar and would not
+   * be honest enough for a number, which is why the seconds shown next to it
+   * are the recording's own when there is one.
+   */
+  const advance = useCallback(() => {
     const element = audio.current
-    if (!element || element.paused || element.ended) return
-    const at = spokenIndex(marks.current, element.currentTime * 1000)
-    setSpokenAt(at >= 0 ? marks.current[at].at : -1)
-    following.current = requestAnimationFrame(followRecording)
+    const now = performance.now()
+
+    if (element && !element.paused && !element.ended) {
+      const total = Number.isFinite(element.duration) ? element.duration : 0
+      setHeard({
+        fraction: total > 0 ? element.currentTime / total : 0,
+        seconds: element.currentTime,
+        total,
+      })
+      const at = spokenIndex(marks.current, element.currentTime * 1000)
+      setSpokenAt(at >= 0 ? marks.current[at].at : -1)
+    } else if (speaking.current) {
+      spokenMs.current += now - lastTick.current
+      const total = estimated.current
+      const seconds = spokenMs.current / 1000
+      setHeard({
+        fraction: total > 0 ? Math.min(1, seconds / total) : 0,
+        seconds: Math.min(seconds, total),
+        total,
+      })
+    } else {
+      return
+    }
+    lastTick.current = now
+    following.current = requestAnimationFrame(advance)
   }, [])
 
+  /** Whether the SYNTHESISER is mid-sentence; the audio element speaks for
+   *  itself. Held in a ref because the loop above outlives the render. */
+  const speaking = useRef(false)
+  const estimated = useRef(0)
+
+  const startFollowing = useCallback(() => {
+    lastTick.current = performance.now()
+    if (following.current === null) following.current = requestAnimationFrame(advance)
+  }, [advance])
+
+  const followRecording = startFollowing
+
   const stopFollowing = useCallback(() => {
+    speaking.current = false
     if (following.current !== null) {
       cancelAnimationFrame(following.current)
       following.current = null
@@ -193,6 +251,8 @@ export function Player() {
     }
     setStatus("idle")
     setSpokenAt(-1)
+    spokenMs.current = 0
+    setHeard({ fraction: 0, seconds: 0, total: 0 })
     setIndex(next)
   }, [stopFollowing])
 
@@ -216,17 +276,28 @@ export function Player() {
       }).catch(() => setStatus("idle"))
       return
     }
+    // Nothing reports position, so the bar is driven from time spoken here
+    // against the slide's estimated length.
+    speaking.current = true
+    estimated.current = target.narration_seconds
+    spokenMs.current = 0
+    startFollowing()
     narrator.current.speak(target.narration, {
-      onStatus: setStatus,
+      onStatus: (next) => {
+        speaking.current = next === "speaking"
+        setStatus(next)
+      },
       onWord: setSpokenAt,
       onEnd: () => {
+        speaking.current = false
+        setHeard((was) => ({ ...was, fraction: 1, seconds: was.total }))
         if (!autoAdvanceNow.current) return
         const next = indexNow.current + 1
         if (next <= lastIndex) goTo(next)
         else setReachedEnd(true)
       },
     })
-  }, [detail, goTo, lastIndex, followRecording])
+  }, [detail, goTo, lastIndex, followRecording, startFollowing])
 
   const playing = status === "speaking"
 
@@ -239,15 +310,17 @@ export function Player() {
       setStatus("paused")
     } else if (status === "paused") {
       if (lesson?.audio_url) {
-        void audio.current?.play().then(followRecording)
+        void audio.current?.play().then(startFollowing)
         setStatus("speaking")
       } else {
         narrator.current.resume()
+        speaking.current = true
+        startFollowing()
       }
     } else {
       speakLesson(index)
     }
-  }, [followRecording, index, lesson, playing, speakLesson, status,
+  }, [index, lesson, playing, speakLesson, startFollowing, status,
       stopFollowing])
 
   // Advancing while speaking should carry the voice to the new slide rather
@@ -315,10 +388,19 @@ export function Player() {
           src={mediaUrl(lesson.audio_url)}
           muted={muted}
           preload="auto"
+          onLoadedMetadata={(event) => {
+            // The estimate on the card is the word count plus the pauses; the
+            // file's own length is better, and known by now.
+            const total = event.currentTarget.duration
+            if (Number.isFinite(total)) {
+              setHeard((was) => ({ ...was, total }))
+            }
+          }}
           onEnded={() => {
             stopFollowing()
             setStatus("idle")
             setSpokenAt(-1)
+            setHeard((was) => ({ ...was, fraction: 1, seconds: was.total }))
             if (!autoAdvanceNow.current) return
             if (index < lastIndex) goTo(index + 1)
             else setReachedEnd(true)
@@ -342,7 +424,32 @@ export function Player() {
         />
       )}
 
-      <div className="mt-5 flex flex-wrap items-center gap-3">
+      {/* How far through the narration. Under the slide, where a listener
+          looks for it, and separate from the slide counter at the top: one
+          says where you are in this minute and a half, the other where you
+          are in the course. */}
+      {lesson.narration && (
+        <div className="mt-4 flex items-center gap-3">
+          <div
+            className="h-1.5 flex-1 overflow-hidden rounded-full bg-sunk"
+            role="progressbar"
+            aria-label="Narration progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(heard.fraction * 100)}
+          >
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{ width: `${Math.min(100, heard.fraction * 100)}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-xs text-muted tabular-nums">
+            {clock(heard.seconds)} / {clock(heard.total || lesson.narration_seconds)}
+          </span>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => step(-1)}

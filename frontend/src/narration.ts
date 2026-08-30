@@ -78,6 +78,22 @@ export const PAUSE = {
  */
 export const LEAD_IN = ", "
 
+/**
+ * The most words to hand to one utterance.
+ *
+ * Chrome stops speaking after about fifteen seconds, which at 150 words per
+ * minute is roughly thirty-seven words. A single sentence can exceed that —
+ * the expanded scripts contain one of forty-five — and when it does, the
+ * keep-alive below is not enough: the utterance is cut off mid-clause and the
+ * `end` event never arrives, so the player waits for a slide that has already
+ * stopped talking.
+ *
+ * So an over-long sentence is broken at its own commas and dashes, which is
+ * where a person reading aloud would draw breath anyway. Thirty leaves room
+ * for a slow voice.
+ */
+const MOST_WORDS = 30
+
 /** Chrome's ~15s cut-off; nudged well inside it. */
 const KEEPALIVE_MS = 10_000
 
@@ -105,6 +121,53 @@ export interface Segment {
  * this would split "e.g." into two sentences, so the guard is a test over the
  * authored script rather than cleverness here.
  */
+/**
+ * A sentence too long for one utterance, broken at its clause boundaries.
+ *
+ * Only ever splits at punctuation the author wrote. If a long sentence has no
+ * commas to break at it is left whole and spoken as it is — a clause cut at an
+ * arbitrary word would sound worse than a sentence that trails off, and the
+ * build refuses to ship a script with one anyway.
+ */
+function breakUp(piece: Segment): Segment[] {
+  if (piece.text.split(/\s+/).length <= MOST_WORDS) return [piece]
+
+  const clauses: { text: string; at: number }[] = []
+  const boundary = /[,;\u2013\u2014]\s+/g
+  let cursor = 0
+  let match: RegExpExecArray | null
+  while ((match = boundary.exec(piece.text)) !== null) {
+    const end = match.index + 1
+    clauses.push({ text: piece.text.slice(cursor, end).trim(), at: cursor })
+    cursor = match.index + match[0].length
+  }
+  clauses.push({ text: piece.text.slice(cursor).trim(), at: cursor })
+  if (clauses.length < 2) return [piece]
+
+  // Re-join neighbouring clauses while they still fit, so the breaks fall as
+  // far apart as they can rather than after every comma.
+  const out: Segment[] = []
+  let held = ""
+  let heldAt = 0
+  for (const clause of clauses) {
+    const joined = held ? held + " " + clause.text : clause.text
+    if (held && joined.split(/\s+/).length > MOST_WORDS) {
+      out.push({ text: held, start: piece.start + heldAt,
+                 pauseAfter: PAUSE.clause })
+      held = clause.text
+      heldAt = clause.at
+    } else {
+      if (!held) heldAt = clause.at
+      held = joined
+    }
+  }
+  if (held) {
+    out.push({ text: held, start: piece.start + heldAt,
+               pauseAfter: piece.pauseAfter })
+  }
+  return out
+}
+
 export function segment(text: string): Segment[] {
   const segments: Segment[] = []
   const boundary = /([.!?]+|[:;])(\s+|$)/g
@@ -134,7 +197,7 @@ export function segment(text: string): Segment[] {
     segments.push({ text: tail, start: text.indexOf(tail, cursor),
                     pauseAfter: 0 })
   }
-  return segments
+  return segments.flatMap(breakUp)
 }
 
 /** Roughly how long the pauses add to a piece of narration, in seconds. */

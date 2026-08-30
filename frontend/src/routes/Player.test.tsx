@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -36,6 +36,41 @@ function detail(overrides: Record<string, unknown> = {}) {
  *  element. */
 function transcriptShown(): boolean {
   return (document.body.textContent ?? "").includes("Over the next few minutes")
+}
+
+/**
+ * Hand control of the animation frame and the clock to the test.
+ *
+ * The player advances the bar inside requestAnimationFrame, reading
+ * performance.now() for the elapsed time. Faking timers gets one of those and
+ * not the other; this gets both, so the assertions are exact rather than
+ * approximate.
+ */
+function driveFrames() {
+  let pending: FrameRequestCallback | null = null
+  let clockMs = 0
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    pending = callback
+    return 1
+  })
+  vi.stubGlobal("cancelAnimationFrame", () => { pending = null })
+  // Only `now` — replacing the whole of performance breaks the testing
+  // library's own timing.
+  vi.spyOn(performance, "now").mockImplementation(() => clockMs)
+
+  return {
+    tick(ms: number, steps = 8) {
+      // The loop accumulates the delta between frames, so a handful of large
+      // steps sums to the same elapsed time as hundreds of small ones — and
+      // each one costs a React flush.
+      for (let i = 0; i < steps; i++) {
+        clockMs += ms / steps
+        const frame = pending
+        pending = null
+        if (frame) act(() => frame(clockMs))
+      }
+    },
+  }
 }
 
 function renderPlayer() {
@@ -116,5 +151,87 @@ describe("the transcript", () => {
     renderPlayer()
     await screen.findByText("Security Awareness Training")
     expect(transcriptShown()).toBe(false)
+  })
+})
+
+describe("the narration progress bar", () => {
+  it("is there for a narrated slide, and starts at nothing", async () => {
+    moduleDetail.mockResolvedValue(detail())
+    renderPlayer()
+    const bar = await screen.findByRole("progressbar", { name: "Narration progress" })
+    expect(bar).toHaveAttribute("aria-valuenow", "0")
+  })
+
+  it("shows the length of the slide beside it", async () => {
+    moduleDetail.mockResolvedValue(detail({ narration_seconds: 85 }))
+    renderPlayer()
+    // 0:00 of 1:25 — minutes and seconds, not a raw count.
+    expect(await screen.findByText("0:00 / 1:25")).toBeInTheDocument()
+  })
+
+  it("fills as the synthesiser speaks", async () => {
+    // The browser synthesiser reports no position at all, so the bar is driven
+    // from time spoken against the slide's estimated length. That is the path
+    // with nothing to measure, and therefore the one worth testing.
+    //
+    // The frame loop is driven by hand rather than with fake timers: the
+    // component reads performance.now() inside requestAnimationFrame, and
+    // controlling both directly is the difference between a deterministic
+    // test and one that waits and hopes.
+    const { tick } = driveFrames()
+    moduleDetail.mockResolvedValue(detail({ narration_seconds: 100 }))
+    renderPlayer()
+    await screen.findByText("Security Awareness Training")
+    await userEvent.click(screen.getByRole("button", { name: /Play narration/ }))
+
+    const bar = screen.getByRole("progressbar", { name: "Narration progress" })
+    expect(bar).toHaveAttribute("aria-valuenow", "0")
+
+    tick(25_000)                       // a quarter of the way through
+    expect(Number(bar.getAttribute("aria-valuenow"))).toBeGreaterThan(20)
+    expect(Number(bar.getAttribute("aria-valuenow"))).toBeLessThan(30)
+
+    tick(80_000)                       // past the end
+    expect(bar).toHaveAttribute("aria-valuenow", "100")
+  })
+
+  it("never runs past the end of the slide", async () => {
+    // The length it is measured against is an estimate, so time spoken can
+    // overrun it. A bar that keeps filling past full looks broken.
+    const { tick } = driveFrames()
+    moduleDetail.mockResolvedValue(detail({ narration_seconds: 10 }))
+    renderPlayer()
+    await screen.findByText("Security Awareness Training")
+    await userEvent.click(screen.getByRole("button", { name: /Play narration/ }))
+
+    tick(60_000)
+    const bar = screen.getByRole("progressbar", { name: "Narration progress" })
+    expect(bar).toHaveAttribute("aria-valuenow", "100")
+    expect(screen.getByText("0:10 / 0:10")).toBeInTheDocument()
+  })
+
+  it("goes back to nothing on the next slide", async () => {
+    const { tick } = driveFrames()
+    const two = detail({ narration_seconds: 100 })
+    two.lessons.push({ ...two.lessons[0], ordinal: 2, title: "Why Security Matters" })
+    moduleDetail.mockResolvedValue(two)
+    renderPlayer()
+    await screen.findByText("Security Awareness Training")
+    await userEvent.click(screen.getByRole("button", { name: /Play narration/ }))
+    tick(30_000)
+    await userEvent.click(screen.getByRole("button", { name: "Next slide" }))
+
+    expect(screen.getByRole("progressbar", { name: "Narration progress" }))
+      .toHaveAttribute("aria-valuenow", "0")
+  })
+
+  it("is not drawn on a slide with nothing to narrate", async () => {
+    // The quiz gate is deliberately silent; a bar that never moves is worse
+    // than no bar.
+    moduleDetail.mockResolvedValue(detail({ narration: "", narration_seconds: 0 }))
+    renderPlayer()
+    await screen.findByText("Security Awareness Training")
+    expect(screen.queryByRole("progressbar", { name: "Narration progress" }))
+      .not.toBeInTheDocument()
   })
 })

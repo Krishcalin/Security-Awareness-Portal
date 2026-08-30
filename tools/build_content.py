@@ -120,22 +120,56 @@ def normalise(text: str) -> set:
 #: fails if anything appears in the script that this would mis-split.
 _BOUNDARY = re.compile(r"([.!?]+|[:;])(\s+|$)")
 
+#: Mirrors MOST_WORDS in frontend/src/narration.ts: a sentence longer than this
+#: is broken at its own commas, because one utterance that long is cut off by
+#: Chrome part way through.
+MOST_WORDS = 30
+_CLAUSE = re.compile(r"[,;\u2013\u2014]\s+")
+
 
 def pause_seconds(text: str) -> float:
     """How much silence the player will introduce into this narration.
 
-    Mirrors `segment()` in frontend/src/narration.ts. The last pause is never
-    waited out, because the narration is over by then.
+    Mirrors `segment()` in frontend/src/narration.ts, including the extra
+    breaks an over-long sentence is broken at. The last pause is never waited
+    out, because the narration is over by then.
     """
     pauses = []
-    for terminator, gap in _BOUNDARY.findall(text):
+    cursor = 0
+    for match in _BOUNDARY.finditer(text):
+        end = match.start() + len(match.group(1))
+        sentence = text[cursor:end].strip()
+        cursor = end + len(match.group(2))
+
+        # A sentence too long for one utterance is broken at its commas, and
+        # each of those breaks is a pause too.
+        if len(sentence.split()) > MOST_WORDS:
+            pauses += [PAUSE_MS["clause"]] * _extra_breaks(sentence)
+
+        gap = match.group(2)
         if re.search(r"\n\s*\n", gap):
             pauses.append(PAUSE_MS["paragraph"])
-        elif terminator[0] in ".!?":
+        elif match.group(1)[0] in ".!?":
             pauses.append(PAUSE_MS["sentence"])
         else:
             pauses.append(PAUSE_MS["clause"])
     return sum(pauses[:-1]) / 1000 if pauses else 0.0
+
+
+def _extra_breaks(sentence: str) -> int:
+    """How many times an over-long sentence gets broken."""
+    clauses = _CLAUSE.split(sentence)
+    if len(clauses) < 2:
+        return 0
+    breaks, held = 0, ""
+    for clause in clauses:
+        joined = (held + " " + clause).strip()
+        if held and len(joined.split()) > MOST_WORDS:
+            breaks += 1
+            held = clause
+        else:
+            held = joined
+    return breaks
 
 
 def opening(option: str) -> str:

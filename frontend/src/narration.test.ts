@@ -379,3 +379,61 @@ describe("the lead-in that gets clipped instead of a word", () => {
     expect(onWord).toHaveBeenLastCalledWith("First. Second.".indexOf("Second"))
   })
 })
+
+describe("a sentence too long for one utterance", () => {
+  const LONG =
+    "During the 2015 Ukraine grid attack, at the same moment they were opening " +
+    "breakers, they launched a flood of automated calls at the utility's " +
+    "customer service centre, jamming the lines so customers could not report " +
+    "the outage and operators could not work out what was happening."
+
+  it("is broken up, because Chrome cuts one off part way through", () => {
+    // Forty-five words is about eighteen seconds. Chrome stops at fifteen,
+    // with no error and no `end` event — so the player waits for a slide that
+    // has already stopped talking.
+    const parts = segment(LONG)
+    expect(parts.length).toBeGreaterThan(1)
+    for (const part of parts) {
+      expect(part.text.split(/\s+/).length).toBeLessThanOrEqual(30)
+    }
+  })
+
+  it("is broken only where the author already put punctuation", () => {
+    for (const part of segment(LONG)) {
+      // Each piece ends at a comma, a dash or the full stop — never mid-clause.
+      expect(part.text).toMatch(/[,;–—.]$/)
+    }
+  })
+
+  it("still adds back up to the sentence", () => {
+    expect(segment(LONG).map((p) => p.text).join(" ").split(/\s+/))
+      .toEqual(LONG.split(/\s+/))
+  })
+
+  it("reports where each piece really starts, for the transcript", () => {
+    for (const part of segment(LONG)) {
+      expect(LONG.slice(part.start, part.start + part.text.length))
+        .toBe(part.text)
+    }
+  })
+
+  it("breathes at the breaks rather than stopping", () => {
+    const parts = segment(LONG)
+    expect(parts[0].pauseAfter).toBe(PAUSE.clause)
+    expect(parts[parts.length - 1].pauseAfter).toBe(PAUSE.sentence)
+  })
+
+  it("leaves a long sentence with nowhere to break alone", () => {
+    // Cutting at an arbitrary word would sound worse than a sentence that
+    // trails off, and the build refuses to ship one anyway.
+    const unbroken = Array(40).fill("word").join(" ") + "."
+    expect(segment(unbroken)).toHaveLength(1)
+  })
+
+  it("leaves an ordinary sentence exactly as it was", () => {
+    const parts = segment("A short sentence, with a comma in it. And another.")
+    expect(parts.map((p) => p.text)).toEqual([
+      "A short sentence, with a comma in it.", "And another.",
+    ])
+  })
+})

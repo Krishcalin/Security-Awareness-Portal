@@ -4,7 +4,7 @@
   "summary": "How attackers actually reach people, what those attempts look like, and the habits that stop them. No jargon, no technical background needed.",
   "topic": "general",
   "minutes": 46,
-  "narration_seconds": 2752,
+  "narration_seconds": 2753,
   "lessons": [
     {
       "ordinal": 1,
@@ -243,7 +243,7 @@
       "title": "Key Takeaways",
       "image": "slides/30-summary.png",
       "narration": "Let's close with what's worth carrying out of this session.\n\nThink before you click. Verify the sender, hover over links, and treat urgency as a warning sign rather than an instruction. A single opened attachment started the first blackout in history caused by a cyberattack.\n\nUse strong, unique passwords and turn on multi-factor authentication everywhere it's offered. One reused password on one forgotten account shut down a pipeline serving half a continent.\n\nProtect your devices and your data. Lock your screen, use the VPN, never plug in unknown USB drives — one carried malware across an air gap and destroyed a thousand machines — and handle confidential information through approved channels only.\n\nAnd report anything suspicious immediately, even, and especially, when you think the mistake was yours. In almost every case we've looked at, earlier reporting would have meant a smaller incident.\n\nNone of this requires you to become a security expert. It asks for a few seconds of attention at the right moments, and the confidence to ask a question when something feels off.\n\nYou now have both. Thank you for your time — and welcome to the team that keeps this organisation secure.",
-      "narration_seconds": 84,
+      "narration_seconds": 85,
       "silent_because": ""
     },
     {
@@ -1557,5 +1557,5 @@
       "explains": "Especially then. Early reporting turns a potential crisis into a routine event, and nobody is punished for speaking up."
     }
   ],
-  "content_hash": "811c77cdf69cf80f"
+  "content_hash": "1806855d16797fbb"
 }

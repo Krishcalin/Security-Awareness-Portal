@@ -101,7 +101,7 @@ never reach the thing that runs.
 
 ```bash
 python -m pytest                # 213, needs the database from docker compose
-cd frontend && npm test         # 97
+cd frontend && npm test         # 110
 ```
 
 ---
@@ -188,6 +188,14 @@ middle of "that works". A track that is approximately right is worse than none,
 because the highlight creeps ahead of the voice until the learner distrusts the
 reading rather than the highlight.
 
+**A progress bar shows how far through the narration you are**, under the
+slide and separate from the slide counter above it: one says where you are in
+this minute and a half, the other where you are in the course. A recording
+knows its own position exactly. The browser synthesiser reports none at all, so
+there the bar is driven from time spoken against the slide's estimated
+length — honest enough for a bar, which is why the figure beside it is the
+recording's own whenever there is one.
+
 **The transcript is off by default.** The course is meant to be listened to,
 and a wall of text beside the voice invites people to read ahead instead of
 hearing it. It is one control away, the choice is remembered across slides, and
@@ -217,7 +225,12 @@ gets read aloud. The only thing that reliably produces silence is silence.
 
 So the text is split on its own punctuation and each piece spoken as its own
 utterance: 350ms after a full stop, 200ms after a colon, 650ms between
-paragraphs.
+paragraphs. A sentence too long for one utterance — the expanded scripts
+contain one of forty-five words, about eighteen seconds against Chrome's
+fifteen-second limit — is broken further at its own commas and dashes, never
+mid-clause. Past that limit the utterance is cut off silently and its `end`
+event never arrives, so the player waits for a slide that has already stopped
+talking.
 
 **Each utterance is led by a comma**, which exists to be thrown away. Chrome on
 Windows clips the opening of an utterance — the audio device is still starting
