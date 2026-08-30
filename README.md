@@ -663,9 +663,15 @@ better because it is withdrawn when somebody changes job. A sign-in that
 carries no group claim never demotes somebody granted from the shell.
 
 Every report endpoint checks for itself and answers **404** to anybody else — a
-403 would confirm the screens exist and are worth coming back for. The sign-in
-page says plainly that progress, score and attempt number are recorded and that
-the security team can see them.
+403 would confirm the screens exist and are worth coming back for.
+
+**The sign-in page tells people their completion status, name and address are
+recorded, and why.** It no longer names the score, the attempt number, or who
+can see them — that wording was cut. Worth knowing which side of the line that
+leaves you on: the notice covers the fact of recording, and it does not say
+that a named individual's result is visible to the security team. Where staff
+have to be told that specifically, it belongs in the notice on this page or in
+whatever privacy statement the organisation already publishes.
 
 ---
 

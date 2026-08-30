@@ -718,8 +718,10 @@ def download_certificate(serial: str,
 # ── reporting ──────────────────────────────────────────────────────────────
 #
 # Everything behind `require_admin`, which 404s rather than 403s for anybody
-# else. These are individual results, not anonymous statistics, and the
-# sign-in page says so before anybody starts.
+# else. These are INDIVIDUAL results, not anonymous statistics. The sign-in
+# page tells people their completion status is recorded; it does not say that
+# a named result is visible to the security team, so do not treat this screen
+# as something people have already been told about.
 
 @app.get("/api/report/{slug}")
 def report(slug: str,

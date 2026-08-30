@@ -307,7 +307,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS attempt_question_set_idx
 -- Until now every signed-in person could see their own record and nothing
 -- else, so there was no such thing as a privileged view. A report changes
 -- that, and the boundary is worth being explicit about: these are individual
--- results, not anonymous statistics, and the sign-in page says so.
+-- results, not anonymous statistics. The sign-in page says that completion is
+-- recorded; it does not say that a named result can be read by somebody else.
 --
 -- Granted from the shell (`python -m server.grant`) or, where the tenant is
 -- configured for it, by membership of an Entra group. Never from inside the
