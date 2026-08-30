@@ -45,6 +45,11 @@ export function Shell() {
                 {learner.display_name || learner.email}
               </span>
             )}
+            {learner && (
+              <a href="/auth/logout" className="text-muted hover:text-text">
+                Sign out
+              </a>
+            )}
             <button
               type="button"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

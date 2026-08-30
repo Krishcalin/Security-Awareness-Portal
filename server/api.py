@@ -19,14 +19,16 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import quote
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
+                               Response)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from server import auth, content, db, ingest
+from server import auth, content, db, entra, ingest
 from server.config import settings
 
 log = logging.getLogger(__name__)
@@ -345,6 +347,95 @@ def finish(attempt_id: int,
         "first_attempt": row["attempt_no"] == 1,
     }
 
+
+# ── signing in ─────────────────────────────────────────────────────────────
+# Declared before the catch-all below, or the front page would be served for
+# every one of these.
+
+def _set_session(response: Response, entra_oid: str) -> None:
+    """One place that decides how the session cookie is written.
+
+    HttpOnly so script cannot read it, SameSite=Lax so it is not sent on a
+    cross-site POST but survives the top-level redirect back from Microsoft,
+    and Secure unless it has been explicitly switched off for local http.
+    """
+    response.set_cookie(
+        auth.COOKIE_NAME, auth.issue(entra_oid),
+        max_age=auth.MAX_AGE_SECONDS, httponly=True, samesite="lax",
+        secure=settings.cookie_secure, path="/")
+
+
+def _sign_in_problem(message: str, status: int = 400) -> HTMLResponse:
+    """A sentence a person can act on, rather than a JSON error body rendered
+    as text in the middle of a browser navigation."""
+    return HTMLResponse(status_code=status, content=(
+        "<!doctype html><html lang=\"en-GB\"><head><meta charset=\"utf-8\">"
+        "<title>Sign-in</title><style>body{font:16px/1.6 system-ui,sans-serif;"
+        "margin:16vh auto;max-width:34rem;padding:0 1.5rem}"
+        "a{color:inherit}</style></head><body>"
+        "<h1>Could not sign you in</h1><p>%s</p>"
+        "<p><a href=\"/auth/login\">Try again</a></p></body></html>" % message))
+
+
+@app.get("/auth/login", include_in_schema=False)
+def sign_in(next: str = "/") -> Response:
+    if not entra.configured():
+        return _sign_in_problem(
+            "Microsoft sign-in is not configured on this server. Set the "
+            "ENTRA_* values in the environment; see .env.example.", 503)
+    url, flow = entra.begin(next)
+    response = RedirectResponse(url, status_code=307)
+    # state, nonce and the PKCE verifier have to survive the trip to Microsoft
+    # and there is no server-side session for somebody not yet signed in. The
+    # signature is what makes a callback carrying a state this server never
+    # issued refusable rather than merely unfamiliar.
+    response.set_cookie(
+        entra.FLOW_COOKIE, auth.sign(flow),
+        max_age=entra.FLOW_MAX_AGE_SECONDS, httponly=True, samesite="lax",
+        secure=settings.cookie_secure, path="/auth")
+    return response
+
+
+@app.get("/auth/callback", include_in_schema=False)
+def sign_in_callback(request: Request) -> Response:
+    flow = auth.verify(request.cookies.get(entra.FLOW_COOKIE, ""),
+                       entra.FLOW_MAX_AGE_SECONDS)
+    if not flow:
+        return _sign_in_problem(
+            "This sign-in did not start here, or it took too long. Please "
+            "start again.")
+    try:
+        identity = entra.complete(flow, dict(request.query_params))
+    except entra.SignInRefused as refused:
+        return _sign_in_problem(str(refused), 403)
+
+    auth.upsert_learner(
+        entra_oid=identity["oid"], email=identity["email"],
+        upn=identity["upn"], display_name=identity["display_name"])
+
+    response = RedirectResponse(entra.safe_next(flow.get("next")),
+                                status_code=303)
+    _set_session(response, identity["oid"])
+    response.delete_cookie(entra.FLOW_COOKIE, path="/auth")
+    return response
+
+
+@app.get("/auth/logout", include_in_schema=False)
+def sign_out() -> Response:
+    """Sign out here AND at Microsoft.
+
+    Clearing only this cookie leaves the Microsoft session intact, so the next
+    click on "sign in" silently signs the same person straight back in. On a
+    shared machine that is not a sign-out at all, whatever the button said.
+    """
+    target = "/"
+    if entra.configured():
+        root = settings.entra_redirect_uri.split("/auth/")[0] or "/"
+        target = ("%s/oauth2/v2.0/logout?post_logout_redirect_uri=%s"
+                  % (entra.authority(), quote(root, safe="")))
+    response = RedirectResponse(target, status_code=303)
+    response.delete_cookie(auth.COOKIE_NAME, path="/")
+    return response
 
 # ── the app itself ─────────────────────────────────────────
 #

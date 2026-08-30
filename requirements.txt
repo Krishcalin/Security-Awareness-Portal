@@ -5,6 +5,12 @@ pydantic>=2.6
 psycopg[binary]>=3.1
 psycopg-pool>=3.2
 
+# Microsoft's own library for the Entra sign-in flow. Validating an ID token
+# means checking a signature against a rotating JWKS, the issuer, the
+# audience, the expiry and the nonce; every one of those is somewhere a
+# hand-rolled version quietly accepts a token it should not.
+msal>=1.31
+
 # Tests
 pytest>=7.0
 httpx>=0.27          # required by fastapi.testclient

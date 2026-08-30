@@ -23,6 +23,19 @@ class Settings:
         self.pool_min: int = int(os.environ.get("DB_POOL_MIN", "1"))
         self.pool_max: int = int(os.environ.get("DB_POOL_MAX", "8"))
 
+        # Microsoft Entra ID. Absent in development, where sign-in is done
+        # with `python -m server.devsession` instead.
+        self.entra_tenant_id: str = os.environ.get("ENTRA_TENANT_ID", "")
+        self.entra_client_id: str = os.environ.get("ENTRA_CLIENT_ID", "")
+        self.entra_client_secret: str = os.environ.get("ENTRA_CLIENT_SECRET", "")
+        self.entra_redirect_uri: str = os.environ.get("ENTRA_REDIRECT_URI", "")
+
+        # Secure by default, and switched OFF explicitly for local http. The
+        # other way round is a cookie that silently travels in clear the first
+        # time somebody deploys without reading this file.
+        self.cookie_secure: bool = os.environ.get(
+            "COOKIE_SECURE", "1").lower() not in ("0", "false", "no")
+
     def validate(self) -> None:
         """Refuse to start half-configured.
 
