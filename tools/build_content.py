@@ -34,7 +34,7 @@ OUTPUT = ROOT / "data" / "modules" / "security-awareness-essentials.json"
 #: a decision rather than an omission — the check below fails on any OTHER
 #: unnarrated slide.
 INTENTIONALLY_SILENT = {
-    21: "the knowledge-check gate: a prompt to begin, not material to teach",
+    31: "the knowledge-check gate: a prompt to begin, not material to teach",
 }
 
 #: Pairings where the script title and the artwork slug legitimately share no
@@ -44,7 +44,7 @@ INTENTIONALLY_SILENT = {
 VERIFIED_PAIRINGS = {
     1:  "'Security Awareness Training' is the title slide, slug 'title'",
     6:  "'Multi-Factor Authentication' is abbreviated to 'mfa' in the artwork",
-    20: "'Key Takeaways' is the artwork's 'summary' slide — its image reads "
+    30: "'Key Takeaways' is the artwork's 'summary' slide — its image reads "
         "'Key Takeaways — You're Ready!'",
 }
 
@@ -106,7 +106,13 @@ def normalise(text: str) -> set:
     # Stem a trailing plural so "Password Best Practices" matches the artwork
     # slug "passwords". Crude on purpose: anything cleverer would need a
     # dependency, and the exceptions are named above rather than guessed at.
-    return {w.rstrip("s") for w in words if w not in stop and len(w) > 2}
+    #
+    # Two letters is the floor, not three: the second half of this course is
+    # about IT and OT, and dropping two-letter words would leave "IT vs OT" and
+    # "What is OT Security?" with nothing to match on — which would mean
+    # allowlisting real pairings and blunting the guard on the slides it is
+    # most needed for.
+    return {w.rstrip("s") for w in words if w not in stop and len(w) >= 2}
 
 
 #: Sentence endings, and the paragraph break that outranks them. Kept simple

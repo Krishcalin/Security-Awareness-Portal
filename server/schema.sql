@@ -271,3 +271,33 @@ CREATE INDEX IF NOT EXISTS certificate_unsent_idx ON certificate (issued_at)
 -- than listening.
 ALTER TABLE lesson ADD COLUMN IF NOT EXISTS
     audio_timings_url text NOT NULL DEFAULT '';
+
+-- ── which ten questions this attempt asked ─────────────────────────────────
+--
+-- The bank holds a hundred; a learner answers ten of them, drawn when the
+-- attempt starts. The draw is RECORDED rather than recomputed, for two
+-- reasons. Somebody who closes the tab half way through must come back to the
+-- same ten in the same order, not a fresh draw that discards their answers.
+-- And `response` has to be checkable against what was actually asked, or a
+-- learner could answer questions that were never drawn for them.
+
+CREATE TABLE IF NOT EXISTS attempt_question (
+    attempt_id  bigint NOT NULL REFERENCES attempt(id) ON DELETE CASCADE,
+    -- Where it fell in this learner's ten. The order is part of the draw.
+    position    integer NOT NULL,
+    question_id bigint NOT NULL REFERENCES question(id) ON DELETE CASCADE,
+    PRIMARY KEY (attempt_id, position),
+    UNIQUE (attempt_id, question_id)
+);
+
+-- A fingerprint of the ordered draw. The unique index below is what makes
+-- "no two attempts get the same ten in the same order" a fact rather than a
+-- probability: a repeat cannot be stored, so the draw is simply taken again.
+-- With a hundred questions there are about 6e19 possible ordered tens, so
+-- this is not expected to fire in the lifetime of the service — it is here so
+-- that the guarantee does not depend on that expectation being right.
+ALTER TABLE attempt ADD COLUMN IF NOT EXISTS
+    question_set text NOT NULL DEFAULT '';
+
+CREATE UNIQUE INDEX IF NOT EXISTS attempt_question_set_idx
+    ON attempt (module_id, question_set) WHERE question_set <> '';

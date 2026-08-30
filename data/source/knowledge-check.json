@@ -1,190 +1,1342 @@
 {
   "_about": [
-    "The knowledge check for Security Awareness Essentials.",
+    "The knowledge-check bank for Security Awareness Essentials.",
     "",
-    "AUTHORED SEPARATELY FROM THE TEACHING MATERIAL, on purpose: the answers do",
-    "not belong in the same diff as the slides, so a content review of one is not",
-    "a spoiler for the other.",
+    "AUTHORED SEPARATELY FROM THE TEACHING MATERIAL, on purpose: the",
+    "answers do not belong in the same diff as the slides, so a content",
+    "review of one is not a spoiler for the other.",
     "",
-    "EVERY QUESTION HERE IS MEANT TO DISCRIMINATE. A question that everybody",
-    "answers correctly on the first attempt measures nothing — it cannot tell a",
-    "person who understands from one who does not, so a high score on it is not",
-    "evidence of awareness. `question_stat` in the schema reports the correct rate",
-    "per question precisely so a question that has stopped discriminating can be",
-    "found and replaced.",
+    "EVERY LEARNER SEES TEN OF THESE, DRAWN AT RANDOM. The draw is",
+    "recorded against the attempt, so resuming shows the same ten in the",
+    "same order rather than reshuffling under somebody mid-quiz. Two",
+    "learners never get the same ten in the same order - see",
+    "server/api.py, which re-draws on the astronomically unlikely",
+    "collision rather than leaving it to probability.",
     "",
-    "So these deliberately sit where the material contradicts intuition — powering",
-    "a ransomed machine off, the padlock meaning encrypted rather than honest,",
-    "denying an MFA prompt rather than approving it to stop the buzzing. Each",
-    "distractor is something a reasonable person actually does.",
+    "EVERY QUESTION IS MEANT TO DISCRIMINATE. A question that everybody",
+    "answers correctly on the first attempt measures nothing - it cannot",
+    "tell a person who understands from one who does not, so a high score",
+    "on it is not evidence of awareness. `question_stat` in the schema",
+    "reports the correct rate per question precisely so a question that",
+    "has stopped discriminating can be found and replaced.",
     "",
-    "`teaches` names the slide the question tests, so a low correct rate points at",
-    "the material that failed rather than at the people who answered.",
+    "So these sit where the material contradicts intuition - powering a",
+    "ransomed machine off, the padlock meaning encrypted rather than",
+    "honest, denying an MFA prompt rather than approving it to stop the",
+    "buzzing. Each distractor is something a reasonable person does.",
     "",
-    "ANSWER POSITIONS ARE BALANCED AND IRREGULAR: three correct answers in each",
-    "of the four positions, in no discernible order. A quiz whose answer is never",
-    "the last option, or whose answers cycle, can be scored without reading it.",
-    "`tools/build_content.py` refuses to build if a position goes unused, if one",
-    "position holds more than half the answers, or if every wrong option opens",
-    "with the same words and the correct one does not — that last shape lets a",
-    "learner pick the odd one out without knowing the material."
+    "`teaches` names the slide the question tests, so a low correct rate",
+    "points at the material that failed rather than at the people who",
+    "answered.",
+    "",
+    "ANSWER POSITIONS ARE BALANCED AND IRREGULAR: a quarter of the",
+    "answers in each of the four positions, in no discernible order. A",
+    "bank whose answer is never the last option, or whose answers cycle,",
+    "can be scored without reading it. tools/build_content.py refuses to",
+    "build if a position goes unused, if one position holds more than",
+    "half the answers, or if every wrong option opens with the same words",
+    "and the correct one does not."
   ],
   "questions": [
     {
       "ordinal": 1,
-      "teaches": 11,
-      "prompt": "You open an attachment and files on your screen start renaming themselves with a strange extension. What do you do first?",
+      "teaches": 2,
+      "prompt": "Why does an attacker want the ordinary data you handle day to day?",
       "options": [
-        "Shut the machine down immediately to stop the encryption",
-        "Disconnect from the network but leave the machine running",
-        "Run a full antivirus scan before telling anyone",
-        "Close the application and see whether it stops on its own"
+        "Because most of it is classified at the highest level",
+        "Because it is usually worth more than the organisation's money",
+        "Because it can be sold, held to ransom, or used as a way into something bigger",
+        "Because it is the only thing not protected by the firewall"
       ],
-      "correct_index": 1,
-      "explains": "Disconnect, but do not power off. Pulling the network cable and switching off Wi-Fi limits how far the encryption spreads to shared drives. Shutting down feels decisive and destroys evidence that lives only in memory — evidence the response team needs. Disconnect, then report."
+      "correct_index": 2,
+      "explains": "Almost everything has value to somebody: customer records, financial data, your own credentials. To an attacker each is either something to sell, something to hold hostage, or a door into something larger."
     },
     {
       "ordinal": 2,
-      "teaches": 7,
-      "prompt": "A site shows a padlock and starts with https. What does that actually tell you?",
+      "teaches": 2,
+      "prompt": "Which statement about the consequences of a breach is accurate?",
       "options": [
-        "The site is safe to enter payment details into",
-        "The certificate authority has checked the company behind it",
-        "The site has been verified as legitimate",
-        "The connection is encrypted, and nothing about the site's honesty"
+        "The damage is almost always limited to the account that was compromised",
+        "One compromised account can shut down services, expose personal data and trigger regulatory action",
+        "The main cost is replacing the hardware that was affected",
+        "Consequences are financial only, and are usually covered by insurance"
       ],
-      "correct_index": 3,
-      "explains": "The padlock means the connection is encrypted between you and that server. It says nothing about who owns the server or what they intend. Criminals obtain certificates as easily as anyone else, so a phishing site is very often served over https. Read the domain name, not the padlock."
+      "correct_index": 1,
+      "explains": "The consequences are not contained to the account. A single compromise can halt services people depend on, expose data belonging to customers and colleagues, and cost a reputation that took decades to build."
     },
     {
       "ordinal": 3,
-      "teaches": 6,
-      "prompt": "Your phone buzzes with an MFA approval request you did not trigger. It buzzes again. And again. What do you do?",
+      "teaches": 2,
+      "prompt": "Security at work is often described as the organisation's problem. Why is that incomplete?",
       "options": [
-        "Deny it and report it — someone already has your password",
-        "Turn the phone to silent and deal with it later",
-        "Approve it once so the notifications stop, then change your password",
-        "Ignore the prompts and carry on"
+        "Because the organisation has no legal duty to protect your data",
+        "Because home devices are always more secure than work ones",
+        "Because attackers only ever target organisations, never individuals",
+        "The same habits protect your own bank account, photos and identity"
       ],
-      "correct_index": 0,
-      "explains": "An unexpected prompt means somebody is already using your password — that is the only way it can be generated. Approving to stop the buzzing is exactly what the attacker is waiting for, and it is called MFA fatigue for a reason. Deny, then report so the password can be reset."
+      "correct_index": 3,
+      "explains": "The habits are the same in both places. Good security at work makes you safer everywhere, which is why it is worth the seconds it costs."
     },
     {
       "ordinal": 4,
-      "teaches": 5,
-      "prompt": "Which of these is the strongest password?",
+      "teaches": 3,
+      "prompt": "Phishing remains the most common way attacks begin. Why is it so effective?",
       "options": [
-        "TrustNo1!",
-        "P@ssw0rd!23",
-        "correct-battery-staple-harbour",
-        "Xk7$mQ2p"
+        "It does not look like an attack — it looks like an ordinary email",
+        "It exploits a flaw in email software that cannot be patched",
+        "It only targets people who have never had security training",
+        "It always arrives from an address nobody in the company recognises"
       ],
-      "correct_index": 2,
-      "explains": "Length beats complexity. A long passphrase of unrelated words is far harder to crack than a short string stuffed with symbols, and much easier to remember. Aim for twelve to sixteen characters or more. The other three are short, and two follow patterns that cracking tools try first."
+      "correct_index": 0,
+      "explains": "There is no technical trick to spot. It arrives looking like work, which is why the defence is a habit rather than a tool."
     },
     {
       "ordinal": 5,
-      "teaches": 9,
-      "prompt": "Your phone shows an incoming call from your bank's real, published number. The caller knows your address and the last transaction on your account. What does that establish?",
+      "teaches": 3,
+      "prompt": "A message displays the name of a colleague you know well. What does that establish?",
       "options": [
-        "It is genuine — a caller cannot fake the number on your screen",
-        "It is genuine — only the bank would know those details",
-        "Probably a scam, because a real bank never telephones a customer",
-        "Nothing. Caller ID can be spoofed and details can be bought or breached"
+        "That the message genuinely came from that colleague's account",
+        "Very little — the display name is chosen by the sender and the real address may be quite different",
+        "That the message passed the organisation's spam filtering",
+        "That the sending domain has been verified by the mail provider"
       ],
-      "correct_index": 3,
-      "explains": "Caller ID proves nothing — spoofing a number is trivial. Knowing a few real details proves nothing either; those come from breaches, social media or an earlier call. The defence is always the same: hang up and call back on a number you already trust. A genuine request survives that."
+      "correct_index": 1,
+      "explains": "A display name is decoration. The address behind it is often subtly wrong: an extra letter, a different domain, a public mail service where a company address should be. Read the address, not the name."
     },
     {
       "ordinal": 6,
-      "teaches": 12,
-      "prompt": "You badge through a secure door. Someone carrying two coffees and a laptop follows close behind, smiling. What is the right thing to do?",
+      "teaches": 3,
+      "prompt": "Phishing messages very often insist you act within the hour. Why?",
       "options": [
-        "Let the door close, then hold it open once they show you a badge",
-        "Let the door close and ask them to badge in",
-        "Hold the door — refusing would be rude and they clearly work here",
-        "Hold the door, then mention it to security afterwards"
+        "Because the attacker's access to the fake site genuinely expires",
+        "Because mail systems delete suspicious messages after an hour",
+        "Because urgent messages are more likely to bypass spam filters",
+        "Urgency is designed to stop you thinking and start you clicking"
       ],
-      "correct_index": 1,
-      "explains": "Tailgating works precisely because stopping it feels rude, and full hands are a standard pretext. Holding the door is not politeness, it is an access-control bypass — the control only works if it is applied to everyone. Let it close and ask them to badge in."
+      "correct_index": 3,
+      "explains": "The pressure is the attack. Genuine business rarely arrives with a countdown attached, so treat urgency as a warning sign rather than an instruction."
     },
     {
       "ordinal": 7,
-      "teaches": 16,
-      "prompt": "What causes the most data breaches in practice?",
+      "teaches": 3,
+      "prompt": "What does hovering over a link before clicking actually tell you?",
       "options": [
-        "Malware delivered through software vulnerabilities",
-        "Attackers breaking through technical defences",
-        "Confidential information sent to the wrong recipient",
-        "Stolen or lost laptops"
+        "Whether the destination site is currently online",
+        "Whether the link has been scanned by antivirus",
+        "Where the link really goes, which is often not what the text on screen says",
+        "Whether the sender intended you to click it"
       ],
       "correct_index": 2,
-      "explains": "The most common breach is not a hack. It is confidential information going to the wrong person — a mistyped address, a reply-all, a link shared more widely than intended. That is why knowing the classification of what you are handling matters before you send, share or store it."
+      "explains": "The visible text and the real destination are two different things and are often deliberately different. Hover first, read the domain, click second."
     },
     {
       "ordinal": 8,
-      "teaches": 10,
-      "prompt": "Your organisation has complete, tested, offline backups. Why might ransomware still be a serious problem?",
+      "teaches": 4,
+      "prompt": "You get an invoice attachment from a supplier you have never ordered from. What is the safest response?",
       "options": [
-        "Attackers usually copy the data out before encrypting it, and threaten to publish",
-        "Backups are usually encrypted by the ransomware as well",
-        "Paying is still required to obtain the decryption key",
-        "Restoring from backup is slow but otherwise the risk is handled"
+        "Do not open it, and report it",
+        "Open it to find out which order it refers to",
+        "Forward it to the finance team to identify",
+        "Open it, but only after disabling macros"
       ],
       "correct_index": 0,
-      "explains": "This is double extortion. Modern ransomware crews steal the data before they lock anything, so even a perfect restore leaves the second threat intact: pay, or we publish what we took. Backups solve availability. They do nothing about disclosure."
+      "explains": "Unexpected invoices and delivery notices are among the most common ways malware arrives. Opening it to identify it is doing the attacker's work. Report it instead."
     },
     {
       "ordinal": 9,
-      "teaches": 15,
-      "prompt": "You find an unlabelled USB drive in the car park. What is the correct action?",
+      "teaches": 4,
+      "prompt": "A document asks you to enable content or enable editing before it will display. What does that usually mean?",
       "options": [
-        "Hand it to the security team without plugging it in anywhere",
-        "Leave it where it is in case the owner comes back",
-        "Plug it into an isolated machine to find the owner",
-        "Scan it with antivirus first, then open it to look for a name"
+        "It is trying to run macros, and that prompt is the attack",
+        "The file was created in a newer version of the software",
+        "Your licence has expired and needs to be refreshed",
+        "The document is protected and requires your password"
       ],
       "correct_index": 0,
-      "explains": "Dropped drives are a real technique that relies on exactly this curiosity. Some carry malware; others imitate a keyboard and type commands the moment they are connected, which no antivirus scan will catch because nothing is ever read as a file. Do not test it. Hand it in."
+      "explains": "That prompt exists to get you to switch off the protection that is stopping the file running code. A genuine document does not need it to be readable."
     },
     {
       "ordinal": 10,
-      "teaches": 17,
-      "prompt": "You clicked a link in a suspicious email an hour ago and nothing seems to have happened. What now?",
+      "teaches": 4,
+      "prompt": "How many red flags should it take before you stop and report a message?",
       "options": [
-        "Run a virus scan and report it only if the scan finds something",
-        "Change your password quietly and move on",
-        "Report it now, even though you are not sure anything went wrong",
-        "Watch for unusual behaviour and report it only if something appears"
+        "Three or more, otherwise reports become too frequent",
+        "One is enough to justify a second look, and two together mean stop",
+        "Only when you are certain the message is malicious",
+        "Only if the message asks for money directly"
       ],
-      "correct_index": 2,
-      "explains": "Uncertainty is exactly when to report — you do not need to be sure, and waiting for symptoms wastes the window where the damage can still be limited. Nobody is penalised for raising the alarm, and reporting fast is what turns a potential crisis into a routine event."
+      "correct_index": 1,
+      "explains": "You do not need certainty. One flag deserves a closer look; two together mean stop and report. Nobody is penalised for a report that turns out to be nothing."
     },
     {
       "ordinal": 11,
-      "teaches": 14,
-      "prompt": "You are in an airport and see two networks: \"Airport_WiFi\" and \"Airport WiFi Free\". Which is safe to join?",
+      "teaches": 4,
+      "prompt": "A message claiming to be from your bank links to a completely unrelated domain. What is that?",
       "options": [
-        "Either, as long as you only browse and do not log in anywhere",
-        "Whichever has the stronger signal",
-        "The one requiring a password, since open networks are the risk",
-        "Neither, until you confirm the exact name with airport staff"
+        "Normal, because banks use third-party marketing providers",
+        "Evidence the message was forwarded by a colleague",
+        "A sign the link has been shortened for convenience",
+        "A mismatch between sender and destination, which is a classic phishing sign"
       ],
       "correct_index": 3,
-      "explains": "A fake hotspot named to look official is a standard trick, and a password on it proves nothing — the attacker chose the password. Verify the exact network name with staff, use the VPN, and prefer your own mobile hotspot, which is safer than any network you did not set up."
+      "explains": "The destination should match the sender. A message that claims one identity and links somewhere unrelated is telling you what it is."
     },
     {
       "ordinal": 12,
-      "teaches": 18,
-      "prompt": "A colleague shares their login with a new starter whose account has not been set up yet, so the work is not held up. How is this best described?",
+      "teaches": 5,
+      "prompt": "Which matters more in a password: length or symbol complexity?",
       "options": [
-        "A malicious insider action",
-        "A negligent insider action: knowing the rule and working around it",
-        "Not a security matter, since neither of them intends harm",
-        "Sensible teamwork — the work still needs doing"
+        "Complexity, because symbols defeat automated cracking",
+        "Neither, as long as the password is changed every month",
+        "Length — a long passphrase of unrelated words beats a short string of symbols",
+        "Complexity, because length is limited by most websites anyway"
+      ],
+      "correct_index": 2,
+      "explains": "Length beats complexity, and it is easier to remember. Aim for twelve to sixteen characters or more; a few unrelated words does it."
+    },
+    {
+      "ordinal": 13,
+      "teaches": 5,
+      "prompt": "Why is reusing one password across accounts the most damaging habit?",
+      "options": [
+        "Because websites can detect reuse and lock the account",
+        "Because reused passwords expire faster than unique ones",
+        "When any one site is breached, attackers immediately try that pair everywhere else",
+        "Because it makes the password easier to guess directly"
+      ],
+      "correct_index": 2,
+      "explains": "Breaches happen constantly, and leaked credentials are replayed against every other service within hours. One reused password can unlock a dozen accounts."
+    },
+    {
+      "ordinal": 14,
+      "teaches": 5,
+      "prompt": "Is using a password manager a shortcut that weakens security?",
+      "options": [
+        "Yes, because all the passwords sit in one place",
+        "No — it is the practical way to have a strong, unique password everywhere",
+        "Yes, because it removes the need to remember anything",
+        "It makes no difference either way to account security"
       ],
       "correct_index": 1,
-      "explains": "Negligent, not malicious — and that distinction matters because most insider risk looks exactly like this. The intent is good and the rule is known; convenience simply wins. The consequence is that two people now act under one identity, and nothing afterwards can tell them apart."
+      "explains": "It generates and remembers a unique strong password per site so you only recall one master passphrase. That is not cutting a corner; it is the only realistic way to do this properly."
+    },
+    {
+      "ordinal": 15,
+      "teaches": 5,
+      "prompt": "The IT helpdesk phones and asks for your password to fix an account problem. What do you do?",
+      "options": [
+        "Give it, since the helpdesk is authorised to hold credentials",
+        "Give it, but change the password immediately afterwards",
+        "Give only the first half, so it cannot be used on its own",
+        "Refuse — no legitimate team ever needs your password"
+      ],
+      "correct_index": 3,
+      "explains": "Nobody legitimate needs your password: not a colleague, not IT, not anyone who asks. A request for it is the attack, whoever appears to be asking."
+    },
+    {
+      "ordinal": 16,
+      "teaches": 6,
+      "prompt": "What does multi-factor authentication actually protect against?",
+      "options": [
+        "A stolen password being enough on its own",
+        "Your password being guessed in the first place",
+        "Malware already running on your laptop",
+        "Phishing emails reaching your inbox"
+      ],
+      "correct_index": 0,
+      "explains": "It does not stop the password being stolen. It makes the theft useless: without the second factor in your pocket, the password alone gets nobody in."
+    },
+    {
+      "ordinal": 17,
+      "teaches": 6,
+      "prompt": "Which second factor is preferable where you have the choice?",
+      "options": [
+        "A code sent by text message",
+        "An authenticator app or a hardware security key",
+        "A memorable security question",
+        "A second password kept separately"
+      ],
+      "correct_index": 1,
+      "explains": "SMS codes can be intercepted or redirected. An authenticator app or a hardware key is materially stronger, and it is usually just a setting."
+    },
+    {
+      "ordinal": 18,
+      "teaches": 6,
+      "prompt": "Your phone buzzes repeatedly with approval requests you did not trigger. What is happening?",
+      "options": [
+        "Somebody already has your password and is hoping you will tap approve to stop the buzzing",
+        "The authenticator app has lost sync and needs re-registering",
+        "Your account is being migrated to a new sign-in system",
+        "The network is retrying a request that failed earlier"
+      ],
+      "correct_index": 0,
+      "explains": "An unexpected prompt can only be generated by somebody entering your password. This is called MFA fatigue and it works on people who just want the noise to stop. Deny it, then report it."
+    },
+    {
+      "ordinal": 19,
+      "teaches": 6,
+      "prompt": "What are the two factors in multi-factor authentication?",
+      "options": [
+        "Something you know and somewhere you are",
+        "Two things you know, kept separately",
+        "A password and the answer to a security question",
+        "Something you know and something you have"
+      ],
+      "correct_index": 3,
+      "explains": "Your password is something you know; your phone, app or key is something you have. The strength comes from the two being different kinds of thing."
+    },
+    {
+      "ordinal": 20,
+      "teaches": 7,
+      "prompt": "Which part of a web address deserves the most attention?",
+      "options": [
+        "The words at the very end of the address",
+        "Whether the address begins with www",
+        "The domain name immediately before the first single slash",
+        "The length of the address overall"
+      ],
+      "correct_index": 2,
+      "explains": "Everything after the domain is chosen by whoever owns it. Attackers put reassuring words in the path precisely because people read left to right and stop early."
+    },
+    {
+      "ordinal": 21,
+      "teaches": 7,
+      "prompt": "A pop-up warns that your device is infected and offers a fix. What should you do?",
+      "options": [
+        "Click the scan button to check whether it is true",
+        "Close the tab without interacting with the pop-up",
+        "Click the close button inside the pop-up window",
+        "Install the offered tool, then remove it afterwards"
+      ],
+      "correct_index": 1,
+      "explains": "Both the warning and its buttons are bait, including the one that looks like close. Shut the tab itself and, if you are unsure, report it."
+    },
+    {
+      "ordinal": 22,
+      "teaches": 7,
+      "prompt": "Why is free software from an unofficial download site a risk?",
+      "options": [
+        "Unofficial sites are always slower to download from",
+        "The software will be an older version than the official one",
+        "It breaches the licence but is otherwise technically safe",
+        "The installer is a convenient way to deliver something else alongside it"
+      ],
+      "correct_index": 3,
+      "explains": "Repackaged installers are a standard delivery method for malware. Free rarely is; get software from the official source or through IT."
+    },
+    {
+      "ordinal": 23,
+      "teaches": 8,
+      "prompt": "Social engineering works by exploiting which human tendencies?",
+      "options": [
+        "Helpfulness, respect for authority, and the wish to avoid conflict",
+        "Carelessness and lack of training",
+        "Greed and dishonesty",
+        "Inexperience with computers"
+      ],
+      "correct_index": 0,
+      "explains": "It targets instincts that normally serve you well, which is why being a decent colleague is not protection. Verification is."
+    },
+    {
+      "ordinal": 24,
+      "teaches": 8,
+      "prompt": "Someone calls claiming to be a vendor engineer with a plausible, detailed story. What is that technique called?",
+      "options": [
+        "Tailgating — following someone into a restricted place",
+        "Baiting — leaving something tempting to be picked up",
+        "Pretexting — an invented backstory to justify the request",
+        "Shoulder surfing — reading information over someone's shoulder"
+      ],
+      "correct_index": 2,
+      "explains": "Pretexting is the invented context that makes the request seem reasonable. The detail is what sells it, and detail is easy to research."
+    },
+    {
+      "ordinal": 25,
+      "teaches": 8,
+      "prompt": "Why do attackers so often impersonate a senior executive?",
+      "options": [
+        "Because people hesitate to question someone senior",
+        "Because executive accounts have no multi-factor authentication",
+        "Because executives are the only staff with system access",
+        "Because their email addresses are the easiest to guess"
+      ],
+      "correct_index": 0,
+      "explains": "The borrowed authority is the point: it discourages the one step that would defeat the attack, which is checking."
+    },
+    {
+      "ordinal": 26,
+      "teaches": 8,
+      "prompt": "What is the single defence that works against every social engineering approach?",
+      "options": [
+        "Ask the caller for more details to test their story",
+        "Ask them to put the request in writing by email",
+        "Check whether the caller ID matches a known number",
+        "Verify independently — hang up and call back on a number you already trust"
+      ],
+      "correct_index": 3,
+      "explains": "Verification through a channel you chose defeats the whole family of attacks. Asking for detail invites a better story; caller ID and email can both be faked. A genuine request survives a call back."
+    },
+    {
+      "ordinal": 27,
+      "teaches": 9,
+      "prompt": "A caller knows your address and your last transaction. What does that prove?",
+      "options": [
+        "That the caller has legitimate access to your account",
+        "That the call originated from inside your bank's network",
+        "Nothing — those details come from breaches, social media or an earlier call",
+        "That the caller is who they say they are, but may still be mistaken"
+      ],
+      "correct_index": 2,
+      "explains": "A handful of real details is cheap to obtain and is used precisely because it makes everything after it sound true."
+    },
+    {
+      "ordinal": 28,
+      "teaches": 9,
+      "prompt": "Your phone shows your bank's real published number. Can the call be trusted?",
+      "options": [
+        "Yes, a displayed number cannot be faked by a caller",
+        "No — caller ID is trivially spoofed and proves nothing at all",
+        "Yes, provided the caller does not ask for your full password",
+        "Only if the call arrives during the bank's opening hours"
+      ],
+      "correct_index": 1,
+      "explains": "Spoofing a number takes no effort. The number on your screen is a claim, not evidence. Hang up and call back on a number you already trust."
+    },
+    {
+      "ordinal": 29,
+      "teaches": 9,
+      "prompt": "A text says a parcel could not be delivered and links to a page to rearrange it. What is that?",
+      "options": [
+        "Smishing — phishing by text message",
+        "Vishing — phishing by voice call",
+        "A legitimate notification from the courier",
+        "A spam message with no security implication"
+      ],
+      "correct_index": 0,
+      "explains": "Failed delivery, blocked payment and pending refund are the three most common smishing pretexts, because almost everybody is expecting one of them."
+    },
+    {
+      "ordinal": 30,
+      "teaches": 9,
+      "prompt": "A caller asks you to install remote-access software so they can fix a problem. What should you do?",
+      "options": [
+        "Install it, but disconnect as soon as they finish",
+        "Install it only if they can name your manager",
+        "Ask them to email the software instead",
+        "Refuse, end the call, and report it"
+      ],
+      "correct_index": 3,
+      "explains": "Handing over remote access hands over everything the account can reach. No genuine support process begins with an unsolicited call asking for it."
+    },
+    {
+      "ordinal": 31,
+      "teaches": 10,
+      "prompt": "How does ransomware usually get in?",
+      "options": [
+        "By exploiting a flaw in the electricity supply to servers",
+        "Through the organisation's public website being defaced",
+        "Through a phishing attachment, a malicious link, or a compromised remote-access account",
+        "By physically breaking into the server room"
+      ],
+      "correct_index": 2,
+      "explains": "It arrives quietly through ordinary routes, which is why the everyday habits in this course are what actually prevent it."
+    },
+    {
+      "ordinal": 32,
+      "teaches": 10,
+      "prompt": "Your organisation has complete, tested, offline backups. Why is ransomware still a serious problem?",
+      "options": [
+        "Restoring from backup is slow but the risk is otherwise handled",
+        "Attackers usually copy the data out before encrypting it, and threaten to publish",
+        "Backups are normally encrypted by the ransomware as well",
+        "Payment is still required to obtain the decryption key"
+      ],
+      "correct_index": 1,
+      "explains": "This is double extortion. Backups solve availability; they do nothing about disclosure. Even a perfect restore leaves the second threat intact."
+    },
+    {
+      "ordinal": 33,
+      "teaches": 10,
+      "prompt": "What is the realistic timescale for recovering from a serious ransomware incident?",
+      "options": [
+        "A few hours, once the ransom decision is made",
+        "Minutes, if backups are held offsite",
+        "Days to weeks, with operations halted in the meantime",
+        "It depends entirely on whether the ransom is paid"
+      ],
+      "correct_index": 2,
+      "explains": "Systems stop, operations halt and teams sit idle. Recovery is measured in days and weeks, which is why prevention is dramatically cheaper."
+    },
+    {
+      "ordinal": 34,
+      "teaches": 10,
+      "prompt": "What does ransomware do first once it is inside?",
+      "options": [
+        "Displays the ransom demand immediately",
+        "Deletes the operating system so the machine will not restart",
+        "Sends a copy of itself to everyone in your address book",
+        "Begins encrypting everything it can reach, including shared drives"
+      ],
+      "correct_index": 3,
+      "explains": "The demand appears after the damage is done. By the time you see it, it has already reached whatever the account could reach."
+    },
+    {
+      "ordinal": 35,
+      "teaches": 11,
+      "prompt": "Files are renaming themselves with a strange extension. What is your first action?",
+      "options": [
+        "Disconnect from the network but leave the machine running",
+        "Shut the machine down immediately to stop the encryption",
+        "Run a full antivirus scan before telling anyone",
+        "Close the application and see whether it stops on its own"
+      ],
+      "correct_index": 0,
+      "explains": "Disconnect, but do not power off. Pulling the cable and switching off Wi-Fi limits the spread to shared drives; shutting down feels decisive and destroys evidence that exists only in memory."
+    },
+    {
+      "ordinal": 36,
+      "teaches": 11,
+      "prompt": "Why should you not power off a machine you suspect is running ransomware?",
+      "options": [
+        "Powering off can corrupt the encrypted files permanently",
+        "Evidence the response team needs lives in memory and is lost on shutdown",
+        "The machine may not restart afterwards",
+        "It triggers the ransomware to delete files immediately"
+      ],
+      "correct_index": 1,
+      "explains": "Memory holds the material that lets the response team understand what happened and how far it went. Disconnect instead."
+    },
+    {
+      "ordinal": 37,
+      "teaches": 11,
+      "prompt": "You worry you may have caused the infection. Should that change when you report?",
+      "options": [
+        "Yes, gather evidence first so the report is accurate",
+        "No — report immediately, because minutes limit the damage and nobody is penalised for raising the alarm",
+        "Yes, tell your manager privately before the security team",
+        "Yes, wait until the end of your shift to avoid disruption"
+      ],
+      "correct_index": 1,
+      "explains": "Delay is the only thing that makes it worse. Fast reporting is what turns a potential crisis into a routine event, and it is explicitly not held against anybody."
+    },
+    {
+      "ordinal": 38,
+      "teaches": 11,
+      "prompt": "Who decides whether a ransom is paid?",
+      "options": [
+        "The person whose machine was infected, since they know the files",
+        "Whoever holds the corporate cryptocurrency wallet",
+        "The team leader on shift at the time",
+        "Not you — it is not a decision for the person who found it, and never one to make alone"
+      ],
+      "correct_index": 3,
+      "explains": "Payment funds the next attack and guarantees nothing. The decision is not yours to carry; disconnect, report, and let the response team work."
+    },
+    {
+      "ordinal": 39,
+      "teaches": 12,
+      "prompt": "Someone with full hands follows you through a badge-controlled door. What should you do?",
+      "options": [
+        "Let the door close and ask them to badge in",
+        "Hold the door — refusing would be rude and they clearly work here",
+        "Hold the door, then mention it to security afterwards",
+        "Let the door close, then hold it open once they show you a badge"
+      ],
+      "correct_index": 0,
+      "explains": "Tailgating works precisely because stopping it feels rude, and full hands are a standard pretext. Holding the door is not politeness, it is an access-control bypass — and showing a badge is not the same as badging in."
+    },
+    {
+      "ordinal": 40,
+      "teaches": 12,
+      "prompt": "Why is a clean desk described as a security control?",
+      "options": [
+        "Because clutter slows down the cleaning staff",
+        "Because paper documents are the most common way malware spreads",
+        "Papers and notes left out are readable by everyone who passes, including visitors and contractors",
+        "Because insurers require it before covering an office"
+      ],
+      "correct_index": 2,
+      "explains": "Documents, notes with credentials, unlocked drawers — all of it is available to anyone walking past. Lock papers away and lock your screen every single time you step away."
+    },
+    {
+      "ordinal": 41,
+      "teaches": 12,
+      "prompt": "Why does the organisation ask you to wear your badge visibly?",
+      "options": [
+        "It allows security cameras to identify you automatically",
+        "It is required by fire regulations for headcount",
+        "It is how colleagues know you belong, and how an unfamiliar face becomes noticeable",
+        "It stops the badge being cloned while in your pocket"
+      ],
+      "correct_index": 2,
+      "explains": "Visible badges make the exception visible. If everyone wears one, somebody without one stands out — which is the whole mechanism."
+    },
+    {
+      "ordinal": 42,
+      "teaches": 12,
+      "prompt": "You see an unfamiliar person in a restricted area. What is the right response?",
+      "options": [
+        "Assume they have been escorted in by someone else",
+        "Say nothing unless they touch equipment",
+        "Follow them at a distance to see what they do",
+        "Ask who they are, or report it"
+      ],
+      "correct_index": 3,
+      "explains": "Asking costs a moment of mild awkwardness. Assuming somebody else has checked is exactly what an intruder is relying on."
+    },
+    {
+      "ordinal": 43,
+      "teaches": 13,
+      "prompt": "When should the VPN be connected while working remotely?",
+      "options": [
+        "Before you start working, and for the whole session",
+        "Only when opening confidential documents",
+        "Only when connected to a network you do not control",
+        "Only when the helpdesk asks you to"
+      ],
+      "correct_index": 0,
+      "explains": "Connect first, then work. It encrypts your traffic and keeps access to company systems controlled; switching it on selectively defeats the point."
+    },
+    {
+      "ordinal": 44,
+      "teaches": 13,
+      "prompt": "Which of these actually matters for securing your home Wi-Fi?",
+      "options": [
+        "Hiding the network name so it is not broadcast",
+        "Changing the default router password and using WPA2 or WPA3",
+        "Changing the network name to something anonymous",
+        "Restricting the number of devices that may connect"
+      ],
+      "correct_index": 1,
+      "explains": "The default password and the encryption standard are what an attacker actually has to get past. Hiding the name stops nobody. Your home network is now part of the organisation's attack surface."
+    },
+    {
+      "ordinal": 45,
+      "teaches": 13,
+      "prompt": "You are working in a café. What is the overlooked risk beyond the network?",
+      "options": [
+        "People nearby who can see your screen or hear your call",
+        "The café's electricity supply damaging your laptop",
+        "Your laptop overheating in a warm room",
+        "Losing connection halfway through saving a file"
+      ],
+      "correct_index": 0,
+      "explains": "Shoulder surfing needs no technology at all. Be aware of who can see and hear; confidential conversations deserve a closed door."
+    },
+    {
+      "ordinal": 46,
+      "teaches": 14,
+      "prompt": "What is the main technical risk on an open public network?",
+      "options": [
+        "The network being slower than a mobile connection",
+        "Your device being visible in the venue's guest list",
+        "Automatic installation of software by the venue",
+        "Interception — somebody nearby watching unencrypted traffic or sitting between you and the site"
+      ],
+      "correct_index": 3,
+      "explains": "On an open network you have no idea who else is on it. Interception and man-in-the-middle positioning are the real risks, and the VPN is the answer to both."
+    },
+    {
+      "ordinal": 47,
+      "teaches": 14,
+      "prompt": "You see two networks: \"Airport_WiFi\" and \"Airport WiFi Free\". Which is safe?",
+      "options": [
+        "Whichever has the stronger signal",
+        "The one requiring a password, since open networks are the risk",
+        "Neither, until you confirm the exact name with staff",
+        "Either, as long as you only browse and do not sign in anywhere"
+      ],
+      "correct_index": 2,
+      "explains": "A fake hotspot named to look official is a standard trick, and a password on it proves nothing — the attacker chose the password. Verify the exact name with staff."
+    },
+    {
+      "ordinal": 48,
+      "teaches": 14,
+      "prompt": "Which is safer: the café's Wi-Fi with a VPN, or your own mobile hotspot?",
+      "options": [
+        "The café Wi-Fi, because the VPN makes it equivalent",
+        "Your own mobile hotspot, because you control it",
+        "The café Wi-Fi, because mobile data is unencrypted",
+        "They carry exactly the same risk"
+      ],
+      "correct_index": 1,
+      "explains": "A VPN on public Wi-Fi is good. A network you set up yourself is better, and is the recommendation whenever you have the choice."
+    },
+    {
+      "ordinal": 49,
+      "teaches": 14,
+      "prompt": "Which tasks should wait until you are on a trusted connection or VPN?",
+      "options": [
+        "Anything involving a web browser",
+        "Only tasks that require a password",
+        "Banking, payments and confidential work",
+        "Any task that takes longer than a few minutes"
+      ],
+      "correct_index": 2,
+      "explains": "Sensitive tasks are the ones worth an attacker's attention. Everything else is lower stakes, but the VPN costs nothing to leave on."
+    },
+    {
+      "ordinal": 50,
+      "teaches": 15,
+      "prompt": "You find an unlabelled USB drive in the car park. What should you do?",
+      "options": [
+        "Plug it into an isolated machine to find the owner",
+        "Hand it to the security team without plugging it in anywhere",
+        "Scan it with antivirus first, then look for a name",
+        "Leave it where it is in case the owner returns"
+      ],
+      "correct_index": 1,
+      "explains": "Dropped drives are a real technique that relies on exactly this curiosity. Some carry malware; others imitate a keyboard and type commands the instant they are connected, which no scan will catch."
+    },
+    {
+      "ordinal": 51,
+      "teaches": 15,
+      "prompt": "Why can an antivirus scan miss a malicious USB device entirely?",
+      "options": [
+        "Some devices pretend to be a keyboard and type commands rather than storing files",
+        "Antivirus cannot read removable media at all",
+        "The malware is hidden in the device's serial number",
+        "Scanning only works after the files have been copied off"
+      ],
+      "correct_index": 0,
+      "explains": "There is no file to scan. The device is recognised as input hardware and starts typing the moment it is connected."
+    },
+    {
+      "ordinal": 52,
+      "teaches": 15,
+      "prompt": "Copying company files to your own USB drive to finish work at home. What is wrong with it?",
+      "options": [
+        "Nothing, provided the files are deleted afterwards",
+        "Nothing, as long as the drive stays in your possession",
+        "It is only a problem if the drive is not encrypted",
+        "Once data leaves controlled systems it cannot be tracked, protected or wiped"
+      ],
+      "correct_index": 3,
+      "explains": "Good intentions do not change the outcome. This is the textbook negligent insider action: the rule is known, convenience wins, and the data is now somewhere nobody can account for."
+    },
+    {
+      "ordinal": 53,
+      "teaches": 15,
+      "prompt": "If removable media genuinely has to be used, what does the policy require?",
+      "options": [
+        "Any device, provided it is scanned first",
+        "Any new device still in its packaging",
+        "An approved, issued device, encrypted, and scanned before use",
+        "A device belonging to a colleague you trust"
+      ],
+      "correct_index": 2,
+      "explains": "Approved and issued means it can be accounted for; encrypted means a loss is not a breach. Both matter, and scanning alone covers neither."
+    },
+    {
+      "ordinal": 54,
+      "teaches": 16,
+      "prompt": "Internal process documents and routine announcements are classified as what?",
+      "options": [
+        "Internal",
+        "Public",
+        "Confidential",
+        "Unclassified"
+      ],
+      "correct_index": 0,
+      "explains": "Not damaging on its own, but not for outside eyes either. Public is approved for anyone; confidential is the material that causes real harm if exposed."
+    },
+    {
+      "ordinal": 55,
+      "teaches": 16,
+      "prompt": "Which of these is confidential rather than internal?",
+      "options": [
+        "An internal announcement about office opening hours",
+        "Employee personal data covered by regulation",
+        "A published marketing brochure",
+        "The company's standard process documentation"
+      ],
+      "correct_index": 1,
+      "explains": "Customer and employee personal data, financial records, contracts, credentials and system designs are the material that causes real harm if exposed."
+    },
+    {
+      "ordinal": 56,
+      "teaches": 16,
+      "prompt": "What causes the most breaches in practice?",
+      "options": [
+        "Attackers breaking through technical defences",
+        "Stolen or lost laptops",
+        "Malware delivered through software vulnerabilities",
+        "Confidential information sent to the wrong recipient"
+      ],
+      "correct_index": 3,
+      "explains": "The most common breach is not a hack. It is a mistyped address, a reply-all, or a link shared more widely than intended — which is why knowing the classification before you send matters."
+    },
+    {
+      "ordinal": 57,
+      "teaches": 17,
+      "prompt": "You clicked a link an hour ago and nothing seems to have happened. What now?",
+      "options": [
+        "Watch for unusual behaviour and report only if something appears",
+        "Run a virus scan and report only if it finds something",
+        "Change your password quietly and move on",
+        "Report it now, even though you are not sure anything went wrong"
+      ],
+      "correct_index": 3,
+      "explains": "Uncertainty is exactly when to report. Waiting for symptoms wastes the window in which damage can still be limited, and nobody is penalised for raising the alarm."
+    },
+    {
+      "ordinal": 58,
+      "teaches": 17,
+      "prompt": "Which of these is worth reporting?",
+      "options": [
+        "Only incidents that have clearly caused damage",
+        "All of these — a suspicious email, a missing device, a login alert you did not trigger",
+        "Only incidents involving confidential data",
+        "Only incidents you can explain fully"
+      ],
+      "correct_index": 1,
+      "explains": "You do not need to be sure and you do not need to understand it. If something feels wrong, that is the threshold."
+    },
+    {
+      "ordinal": 59,
+      "teaches": 17,
+      "prompt": "What should you do before trying to fix a suspected incident yourself?",
+      "options": [
+        "Report it first",
+        "Take screenshots and write up what happened",
+        "Isolate the machine and run a full scan",
+        "Check with a colleague whether they have seen the same thing"
+      ],
+      "correct_index": 0,
+      "explains": "Report first. Well-meant fixes can destroy evidence and cost time that matters, and the response team would rather start early than tidy up after."
+    },
+    {
+      "ordinal": 60,
+      "teaches": 17,
+      "prompt": "When is the right time to find out your security team's contact number?",
+      "options": [
+        "When an incident happens, from the intranet",
+        "When your manager circulates it",
+        "Today, before you need it",
+        "It is not needed if you can email the helpdesk"
+      ],
+      "correct_index": 2,
+      "explains": "Looking it up mid-incident costs the minutes that matter. Save it in your phone now."
+    },
+    {
+      "ordinal": 61,
+      "teaches": 18,
+      "prompt": "A colleague shares their login with a new starter whose account is not ready. How is that best described?",
+      "options": [
+        "Sensible teamwork, since the work still needs doing",
+        "A malicious insider action",
+        "Not a security matter, since neither intends harm",
+        "A negligent insider action: the rule is known and worked around"
+      ],
+      "correct_index": 3,
+      "explains": "Negligent, not malicious — and that distinction matters because most insider risk looks exactly like this. The consequence is that two people now act under one identity and nothing afterwards can tell them apart."
+    },
+    {
+      "ordinal": 62,
+      "teaches": 18,
+      "prompt": "Which kind of insider risk is the most common?",
+      "options": [
+        "Accidental — ordinary human error with no bad intent",
+        "Malicious — deliberate misuse for personal gain",
+        "Negligent — knowingly working around the rules",
+        "External actors using stolen insider credentials"
+      ],
+      "correct_index": 0,
+      "explains": "An email to the wrong address, a file shared too widely, a laptop left in a taxi. No bad intent, real consequences, and by far the largest share."
+    },
+    {
+      "ordinal": 63,
+      "teaches": 18,
+      "prompt": "What does taking only the access your role needs actually protect against?",
+      "options": [
+        "Your account being locked for inactivity",
+        "Colleagues seeing what you have access to",
+        "The damage any single compromised account or mistake can cause",
+        "The need to complete access review paperwork"
+      ],
+      "correct_index": 2,
+      "explains": "Least privilege limits the blast radius of both an honest mistake and a stolen credential. It is not about trust; it is about consequences."
+    },
+    {
+      "ordinal": 64,
+      "teaches": 18,
+      "prompt": "You notice a colleague copying unusual volumes of data. What is the right step?",
+      "options": [
+        "Confront them directly to hear their explanation",
+        "Raise it discreetly with the security team",
+        "Mention it informally to other colleagues first",
+        "Do nothing unless you see it happen a second time"
+      ],
+      "correct_index": 1,
+      "explains": "Discreet is the operative word: you may be wrong, and the point is to have it looked at properly rather than to accuse anybody."
+    },
+    {
+      "ordinal": 65,
+      "teaches": 19,
+      "prompt": "A security policy makes a routine part of your job impossible. What should you do?",
+      "options": [
+        "Work around it and mention it if anyone asks",
+        "Follow it exactly and accept the work will not get done",
+        "Ask a colleague how they get around it",
+        "Say so, so it can be fixed properly rather than quietly bypassed"
+      ],
+      "correct_index": 3,
+      "explains": "Policies are accumulated experience, but a policy nobody can follow gets bypassed silently, which is worse than either following or changing it. Say so and get it fixed."
+    },
+    {
+      "ordinal": 66,
+      "teaches": 20,
+      "prompt": "What is the difference in what is at risk when IT fails versus when OT fails?",
+      "options": [
+        "Both put data at risk, but OT affects more records",
+        "IT failures are always more expensive to recover from",
+        "When IT breaks data is at risk; when OT breaks power is at risk",
+        "OT failures are contained to the site where they happen"
+      ],
+      "correct_index": 2,
+      "explains": "Behind an OT failure sit hospitals, water pumping, traffic signals and every home on the network. Both matter, but they fail differently."
+    },
+    {
+      "ordinal": 67,
+      "teaches": 21,
+      "prompt": "What is the simplest way to hold the difference between IT and OT?",
+      "options": [
+        "IT keeps data safe; OT keeps machines safe",
+        "IT is office software; OT is anything on a factory floor",
+        "IT is modern systems; OT is legacy systems",
+        "IT is owned by the business; OT is owned by the vendor"
+      ],
+      "correct_index": 0,
+      "explains": "IT handles information — emails, documents, databases. OT handles the physical world: sensors reading voltage, controllers opening breakers, screens showing the live state of the network."
+    },
+    {
+      "ordinal": 68,
+      "teaches": 21,
+      "prompt": "In IT we usually protect confidentiality first. What comes first in OT?",
+      "options": [
+        "Confidentiality, for the same reasons as IT",
+        "Availability and safety",
+        "Integrity of the historian records",
+        "Regulatory reporting obligations"
+      ],
+      "correct_index": 1,
+      "explains": "A control system that stops, or misbehaves, has immediate physical consequences for equipment, for supply, and for people standing next to that equipment. The priority order genuinely inverts."
+    },
+    {
+      "ordinal": 69,
+      "teaches": 21,
+      "prompt": "Which of these is an OT device rather than an IT one?",
+      "options": [
+        "A protection relay that opens a breaker",
+        "A database server holding customer records",
+        "The corporate email gateway",
+        "A laptop used for billing reports"
+      ],
+      "correct_index": 0,
+      "explains": "OT is the equipment that senses and acts on the physical world. If it measures voltage or moves something, it is OT."
+    },
+    {
+      "ordinal": 70,
+      "teaches": 21,
+      "prompt": "Why does the priority order matter in practice?",
+      "options": [
+        "It changes which team is responsible for the budget",
+        "It determines which systems are audited first",
+        "It only affects how incidents are documented afterwards",
+        "It means a control that is correct for IT can be the wrong action in OT"
+      ],
+      "correct_index": 3,
+      "explains": "Same discipline, very different stakes — which is why the OT procedure exists and why IT habits should not be carried across."
+    },
+    {
+      "ordinal": 71,
+      "teaches": 22,
+      "prompt": "Why is the power sector attractive to attackers seeking leverage rather than money?",
+      "options": [
+        "Power utilities hold more personal data than other sectors",
+        "Electricity underpins hospitals, water, transport, communications and industry",
+        "Power companies are less likely to have security teams",
+        "Grid systems are easier to breach than banking systems"
+      ],
+      "correct_index": 1,
+      "explains": "Being critical infrastructure is the point: the leverage comes from what stops when the power does."
+    },
+    {
+      "ordinal": 72,
+      "teaches": 22,
+      "prompt": "How does the impact of an attack here differ from most other sectors?",
+      "options": [
+        "The financial loss is smaller but takes longer to recover",
+        "Only the operator's own equipment is affected",
+        "Supply is lost, not just data — affecting an entire licence area at once",
+        "The impact is identical, but reporting requirements are stricter"
+      ],
+      "correct_index": 2,
+      "explains": "That immediate, wide impact also generates enormous pressure to restore at any cost, which is exactly the leverage an attacker is looking for."
+    },
+    {
+      "ordinal": 73,
+      "teaches": 22,
+      "prompt": "Which trend has increased the number of possible ways in?",
+      "options": [
+        "Smart meters, remote substations, vendor links and IT/OT integration",
+        "The replacement of analogue meters with mechanical ones",
+        "The reduction in the number of substations",
+        "Consolidation of control rooms into fewer sites"
+      ],
+      "correct_index": 0,
+      "explains": "Every connection adds capability and a possible path inward. The actors range from ransomware crews to state-sponsored teams who establish access and simply wait."
+    },
+    {
+      "ordinal": 74,
+      "teaches": 23,
+      "prompt": "What status do the CEA Cyber Security Regulations have?",
+      "options": [
+        "Voluntary guidance that utilities may choose to adopt",
+        "An international standard adopted by agreement",
+        "An internal policy set by each utility's own board",
+        "A binding legal mandate with defined roles, timelines and consequences"
+      ],
+      "correct_index": 3,
+      "explains": "They move cyber security from good practice to legal obligation across the whole power value chain."
+    },
+    {
+      "ordinal": 75,
+      "teaches": 23,
+      "prompt": "Which parts of the power value chain do the regulations cover?",
+      "options": [
+        "Generation and transmission only",
+        "Distribution companies only",
+        "Generation, transmission, distribution and load despatch",
+        "Only entities that operate across more than one state"
+      ],
+      "correct_index": 2,
+      "explains": "Every entity in the chain is in scope, which is why this applies whatever part of the business you sit in."
+    },
+    {
+      "ordinal": 76,
+      "teaches": 23,
+      "prompt": "Why does awareness training appear in a regulation at all?",
+      "options": [
+        "Because regulators require a minimum training budget",
+        "Because training and awareness are a stated requirement, and completion is evidence of compliance",
+        "Because insurers will not otherwise provide cover",
+        "It does not — training is organisational goodwill"
+      ],
+      "correct_index": 1,
+      "explains": "Your completion record is part of how the organisation demonstrates compliance. That is why this is not optional."
+    },
+    {
+      "ordinal": 77,
+      "teaches": 24,
+      "prompt": "Within how long must a cyber incident be reported to the designated authorities?",
+      "options": [
+        "Twenty-four hours from being noticed",
+        "Six hours from being noticed",
+        "Seventy-two hours, in line with data protection rules",
+        "By the end of the working day on which it was found"
+      ],
+      "correct_index": 1,
+      "explains": "Six hours is a tight clock, and it starts when the incident is noticed — which means your report to the security team has to be immediate, not at the end of your shift."
+    },
+    {
+      "ordinal": 78,
+      "teaches": 24,
+      "prompt": "What does the regulation require regarding accountability for cyber security?",
+      "options": [
+        "A cyber security committee drawn from every department",
+        "Shared accountability across the senior leadership team",
+        "An external consultant retained on permanent contract",
+        "A designated CISO and a nominated alternate, both notified to the authorities"
+      ],
+      "correct_index": 3,
+      "explains": "Accountability is named, not shared. A designated senior officer and a named alternate, both notified."
+    },
+    {
+      "ordinal": 79,
+      "teaches": 24,
+      "prompt": "What must cyber audits cover, and who performs them?",
+      "options": [
+        "IT systems only, by the internal audit team",
+        "OT systems only, by the equipment vendor",
+        "Both IT and OT, by empanelled auditors, with findings tracked to closure",
+        "Whichever systems the utility selects, by any qualified firm"
+      ],
+      "correct_index": 2,
+      "explains": "Both estates, by empanelled auditors, and the findings have to be followed through rather than filed."
+    },
+    {
+      "ordinal": 80,
+      "teaches": 24,
+      "prompt": "Of the five key requirements, which one depends directly on you?",
+      "options": [
+        "Employee awareness training, and the immediacy that makes the six-hour clock achievable",
+        "Appointing a CISO",
+        "Commissioning the cyber audit",
+        "Designing the network segmentation"
+      ],
+      "correct_index": 0,
+      "explains": "Four of the five are the organisation's job. The fifth — and that six-hour clock — depend on the people who notice things first."
+    },
+    {
+      "ordinal": 81,
+      "teaches": 25,
+      "prompt": "How does the service life of OT equipment compare with an office laptop?",
+      "options": [
+        "About the same, five years for both",
+        "Fifteen to twenty years, against three to five",
+        "Shorter, because industrial conditions are harsher",
+        "It varies so widely that no comparison is meaningful"
+      ],
+      "correct_index": 1,
+      "explains": "Much of the OT estate predates modern security design entirely, which is why it cannot simply be treated like IT."
+    },
+    {
+      "ordinal": 82,
+      "teaches": 25,
+      "prompt": "Why can OT systems not be patched on the IT schedule?",
+      "options": [
+        "OT systems do not receive security patches at all",
+        "OT vendors release patches only once every few years",
+        "Patching needs a planned outage, vendor validation and formal approval",
+        "Patching OT requires the regulator's prior consent"
+      ],
+      "correct_index": 2,
+      "explains": "An untested update on a live control system can trip equipment. That is why it goes through the change process, in a window, tested, with a rollback plan."
+    },
+    {
+      "ordinal": 83,
+      "teaches": 25,
+      "prompt": "What is notable about industrial protocols such as Modbus, DNP3 and IEC 61850?",
+      "options": [
+        "They are encrypted by default but use outdated ciphers",
+        "They authenticate devices but not the commands sent",
+        "They are proprietary and therefore obscure to attackers",
+        "Many were designed with no authentication and no encryption, assuming an isolated network"
+      ],
+      "correct_index": 3,
+      "explains": "They were designed decades ago on the assumption that the network was isolated. That assumption is what segmentation is trying to restore."
+    },
+    {
+      "ordinal": 84,
+      "teaches": 25,
+      "prompt": "What is the practical instruction that follows from all these differences?",
+      "options": [
+        "Never apply IT habits to OT systems — follow the OT procedure",
+        "Apply IT controls to OT wherever technically possible",
+        "Treat OT as out of scope for security controls",
+        "Replace OT equipment on the IT refresh cycle"
+      ],
+      "correct_index": 0,
+      "explains": "An IT failure loses information. An OT failure can damage plant, interrupt supply, or endanger people — so the procedure is different on purpose."
+    },
+    {
+      "ordinal": 85,
+      "teaches": 26,
+      "prompt": "What is wrong with standing, always-on vendor remote access?",
+      "options": [
+        "It uses more bandwidth than scheduled access",
+        "It breaches the vendor's own support agreement",
+        "It is precisely how attackers get in",
+        "Nothing, provided the vendor is contractually trusted"
+      ],
+      "correct_index": 2,
+      "explains": "Remote support sessions should be requested, approved, supervised while active, and closed afterwards. Permanent access is a permanent way in."
+    },
+    {
+      "ordinal": 86,
+      "teaches": 26,
+      "prompt": "What must every connection into a control environment be?",
+      "options": [
+        "Encrypted, and logged if the vendor agrees",
+        "Authorised, individually attributed, multi-factor authenticated, time-limited and recorded",
+        "Approved once by the vendor's account manager",
+        "Restricted to office hours"
+      ],
+      "correct_index": 1,
+      "explains": "Individually attributed matters as much as the rest: a shared vendor account means nothing afterwards can say who did what."
+    },
+    {
+      "ordinal": 87,
+      "teaches": 26,
+      "prompt": "How should OT patching be carried out?",
+      "options": [
+        "Through the change process, in a maintenance window, tested, with a rollback plan",
+        "Immediately on release, as with IT systems",
+        "Only when the vendor attends site in person",
+        "Never — OT systems should be left as commissioned"
+      ],
+      "correct_index": 0,
+      "explains": "Never ad hoc and never on a live system. The window and the rollback plan are what make it safe to do at all."
+    },
+    {
+      "ordinal": 88,
+      "teaches": 26,
+      "prompt": "A setting has changed on a control device with no matching work order. How should it be treated?",
+      "options": [
+        "As a configuration drift to correct at the next outage",
+        "As a vendor action that will be documented later",
+        "As normal, if the value is still within tolerance",
+        "As an incident until proven otherwise"
+      ],
+      "correct_index": 3,
+      "explains": "If it does not match known, authorised activity, treat it as an incident. Unexpected commands, new devices, unusual traffic and odd-hours logins all sit in the same category."
+    },
+    {
+      "ordinal": 89,
+      "teaches": 27,
+      "prompt": "What is the principle behind IT/OT segmentation?",
+      "options": [
+        "OT traffic is encrypted before it reaches the IT network",
+        "IT and OT do not talk to each other directly",
+        "OT systems are duplicated so one copy stays isolated",
+        "IT systems are prevented from storing operational data"
+      ],
+      "correct_index": 1,
+      "explains": "It is the single most effective OT control there is, and the principle is that simple."
+    },
+    {
+      "ordinal": 90,
+      "teaches": 27,
+      "prompt": "What is the DMZ between IT and OT for?",
+      "options": [
+        "It holds a backup copy of the control system",
+        "It is where vendor engineers connect from",
+        "It monitors traffic but does not carry any",
+        "Operations publishes data into it and business systems read it from there, so neither side reaches across"
+      ],
+      "correct_index": 3,
+      "explains": "A buffer zone. Data crosses without either network reaching into the other, which is what makes the boundary hold."
+    },
+    {
+      "ordinal": 91,
+      "teaches": 27,
+      "prompt": "What is the default rule at the firewalls enforcing that boundary?",
+      "options": [
+        "Everything is permitted unless specifically blocked",
+        "Traffic is permitted in one direction and logged in the other",
+        "Everything is denied unless specifically approved",
+        "Traffic is permitted between known devices only"
+      ],
+      "correct_index": 2,
+      "explains": "Only specific, approved traffic in a controlled direction. Deny by default is what makes the exceptions meaningful."
+    },
+    {
+      "ordinal": 92,
+      "teaches": 27,
+      "prompt": "Which of these would undo the segmentation design?",
+      "options": [
+        "Connecting a laptop to both networks at once",
+        "Reading an operations report from the business network",
+        "Requesting firewall access through the change process",
+        "Using the approved jump host to reach a control system"
+      ],
+      "correct_index": 0,
+      "explains": "Never create your own bridge — no dual-homed laptop, no phone or dongle in an OT switch, no unapproved wireless link or remote-access tool. One shortcut can undo the entire design."
+    },
+    {
+      "ordinal": 93,
+      "teaches": 28,
+      "prompt": "In OT, why must isolating an affected system follow the approved procedure?",
+      "options": [
+        "Because isolation requires the vendor's licence key",
+        "Disconnecting the wrong thing can do more damage than the attack",
+        "Because the procedure is needed for the audit record",
+        "Because isolation can only be done during a maintenance window"
+      ],
+      "correct_index": 1,
+      "explains": "Safety and grid stability come first. Contain it with operational authority and coordination — never act alone."
+    },
+    {
+      "ordinal": 94,
+      "teaches": 28,
+      "prompt": "When does the six-hour reporting clock start?",
+      "options": [
+        "When the response team confirms it is genuine",
+        "When the affected system is isolated",
+        "When the CISO office opens the following morning",
+        "When the incident is noticed"
+      ],
+      "correct_index": 3,
+      "explains": "Not when somebody gets around to mentioning it. That is why an immediate report to the CISO office is part of the response and not an afterthought."
+    },
+    {
+      "ordinal": 95,
+      "teaches": 28,
+      "prompt": "What is the first step in the OT incident response sequence?",
+      "options": [
+        "Isolate the affected system",
+        "Notify the vendor",
+        "Detect — trusting your instruments and your instincts",
+        "Begin restoring from backup"
+      ],
+      "correct_index": 2,
+      "explains": "A reading that does not match physical reality, a command nobody issued, an unfamiliar login. You know normal better than any tool does."
+    },
+    {
+      "ordinal": 96,
+      "teaches": 28,
+      "prompt": "How should restoration be handled after an OT incident?",
+      "options": [
+        "Planned, sequenced and verified by the response team, once the system is confirmed clean",
+        "Immediately, to minimise the interruption to supply",
+        "By the operator who first noticed the problem",
+        "By restoring the most recent backup without further checks"
+      ],
+      "correct_index": 0,
+      "explains": "Restoring onto a system that is not yet clean simply repeats the incident, with less warning the second time."
+    },
+    {
+      "ordinal": 97,
+      "teaches": 29,
+      "prompt": "What does following access controls mean in an operational environment?",
+      "options": [
+        "Sharing credentials only within your own shift team",
+        "Using a generic operator account for speed during incidents",
+        "Your own credentials only, the access your role needs, and never an unattended logged-in console",
+        "Requesting the widest access so you are never blocked"
+      ],
+      "correct_index": 2,
+      "explains": "Do not prop open doors to substations or control rooms, do not share badges, and never leave an operator console logged in and unattended."
+    },
+    {
+      "ordinal": 98,
+      "teaches": 29,
+      "prompt": "Why are people described as a detection layer in OT?",
+      "options": [
+        "Because the monitoring systems are switched off outside working hours",
+        "You notice things no sensor is watching for — an odd reading, an unexpected visitor, a device that appeared without explanation",
+        "Because sensors cannot be installed in substations",
+        "Because regulation requires manual inspection of all equipment"
+      ],
+      "correct_index": 1,
+      "explains": "Being wrong costs a phone call. Staying quiet can cost a great deal more."
+    },
+    {
+      "ordinal": 99,
+      "teaches": 29,
+      "prompt": "Why does completing cyber training matter beyond the compliance record?",
+      "options": [
+        "It keeps the habits current as the threats change",
+        "It shortens the audit process for the organisation",
+        "It is required before access rights can be granted",
+        "It replaces the need for operational safety briefings"
+      ],
+      "correct_index": 0,
+      "explains": "The record is real and it is part of demonstrating compliance — but the reason to do it is that the threats move and the habits have to move with them."
+    },
+    {
+      "ordinal": 100,
+      "teaches": 30,
+      "prompt": "When is it most important to report a suspected mistake?",
+      "options": [
+        "After you have established what actually happened",
+        "Only if the mistake had a visible consequence",
+        "At the next scheduled team meeting",
+        "Immediately — even, and especially, when you think the mistake was yours"
+      ],
+      "correct_index": 3,
+      "explains": "Especially then. Early reporting turns a potential crisis into a routine event, and nobody is punished for speaking up."
     }
   ]
 }

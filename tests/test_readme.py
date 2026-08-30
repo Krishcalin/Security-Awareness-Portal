@@ -24,13 +24,17 @@ def module_json():
 
 
 def test_the_slide_count_is_right(module_json):
-    assert "Twenty-one slides" in README
-    assert len(module_json["lessons"]) == 21
+    assert "Thirty-one slides" in README
+    assert len(module_json["lessons"]) == 31
 
 
 def test_the_question_count_is_right(module_json):
-    assert "twelve-question knowledge check" in README
-    assert len(module_json["questions"]) == 12
+    """The bank and the draw are different numbers, and both appear."""
+    from server.config import settings
+    assert len(module_json["questions"]) == 100
+    assert "bank of 100" in README
+    assert "ten questions" in README
+    assert settings.quiz_length == 10
 
 
 def test_the_artwork_count_matches_the_slides(module_json):

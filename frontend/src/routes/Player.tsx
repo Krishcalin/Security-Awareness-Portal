@@ -388,8 +388,10 @@ export function Player() {
         <div className="mt-6 rounded-xl border border-accent bg-accent-soft p-5">
           <h2 className="font-semibold">Ready for the knowledge check?</h2>
           <p className="mt-1 text-sm">
-            {detail.question_count} questions. You will be told why each answer
-            is right, whichever way you went.
+            {detail.question_count} questions
+            {detail.question_bank > detail.question_count &&
+              `, drawn at random from ${detail.question_bank}`}. You will be
+            told why each answer is right, whichever way you went.
           </p>
           <Link
             to={`/module/${slug}/check`}

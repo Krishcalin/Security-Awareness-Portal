@@ -15,10 +15,11 @@ is a new attempt, numbered, and the number is kept.
 """
 from __future__ import annotations
 
+import hashlib
 import io as _io
 import json
-import math
 import logging
+import math
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -113,6 +114,84 @@ def _questions(module_id: int) -> List[Dict[str, Any]]:
         (module_id,))
 
 
+#: Cryptographically seeded, so two servers starting in the same second do
+#: not deal the same hands.
+_DRAW = secrets.SystemRandom()
+
+
+def _fingerprint(question_ids: list) -> str:
+    """Identifies an ORDERED draw.
+
+    Two learners given the same ten in a different order have different
+    fingerprints. That is the promise that was asked for, and the looser of
+    the two readings — which is the right one, because insisting no two people
+    ever share a SET would start refusing draws long before it needed to.
+    """
+    return hashlib.sha256(
+        ",".join(str(i) for i in question_ids).encode("ascii")).hexdigest()
+
+
+def _deal(bank: List[Dict[str, Any]], how_many: int) -> List[int]:
+    """`sample` rather than `shuffle` and slice: it returns them already in a
+    random ORDER, which is half of what has to be unique."""
+    return [q["id"] for q in _DRAW.sample(bank, min(how_many, len(bank)))]
+
+
+def _attempt_questions(attempt_id: int) -> List[Dict[str, Any]]:
+    """This attempt's questions, in the order they were dealt."""
+    return db.query(
+        """
+        SELECT q.id, q.ordinal, q.prompt, q.options, q.correct_index,
+               q.explains, q.teaches, aq.position
+        FROM attempt_question aq JOIN question q ON q.id = aq.question_id
+        WHERE aq.attempt_id = %s ORDER BY aq.position
+        """, (attempt_id,))
+
+
+def _begin_attempt(learner: Dict[str, Any], module: Dict[str, Any],
+                   bank: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Deal a hand, and write it down.
+
+    The unique index on (module_id, question_set) is what makes "no two
+    attempts get the same ten in the same order" a fact rather than a
+    probability: a repeat cannot be stored, so the draw is simply taken again.
+    With a hundred questions there are about 6e19 ordered tens, so this is not
+    expected to fire — it is here so the guarantee does not rest on that
+    expectation being right.
+    """
+    import psycopg
+
+    for _ in range(8):
+        drawn = _deal(bank, settings.quiz_length)
+        try:
+            with db.connection() as conn:
+                attempt = conn.execute(
+                    """
+                    INSERT INTO attempt (learner_id, module_id, attempt_no,
+                                         content_hash, out_of, question_set)
+                    VALUES (%(learner)s, %(module)s,
+                            COALESCE((SELECT max(attempt_no) + 1 FROM attempt
+                                       WHERE learner_id = %(learner)s
+                                         AND module_id = %(module)s), 1),
+                            %(hash)s, %(out_of)s, %(fingerprint)s)
+                    RETURNING *
+                    """,
+                    {"learner": learner["id"], "module": module["id"],
+                     "hash": module["content_hash"], "out_of": len(drawn),
+                     "fingerprint": _fingerprint(drawn)}).fetchone()
+                for position, question_id in enumerate(drawn):
+                    conn.execute(
+                        "INSERT INTO attempt_question (attempt_id, position, "
+                        "question_id) VALUES (%s, %s, %s)",
+                        (attempt["id"], position, question_id))
+                conn.commit()
+                return attempt
+        except psycopg.errors.UniqueViolation:
+            log.info("redrawing: that exact hand has been dealt before")
+    raise HTTPException(status_code=503,
+                        detail="could not draw a question set; please retry")
+
+
 def _owned_attempt(attempt_id: int, learner: Dict[str, Any]) -> Dict[str, Any]:
     row = db.one("SELECT * FROM attempt WHERE id = %s", (attempt_id,))
     # Same answer for "does not exist" and "is not yours": otherwise the API
@@ -151,8 +230,14 @@ def modules(learner: Dict[str, Any] = Depends(auth.current_learner)):
                m.content_hash,
                (SELECT count(*) FROM lesson l WHERE l.module_id = m.id)
                    AS lessons,
+               -- What a learner ANSWERS, not how many are in the bank. The
+               -- card says "10 questions" and a score reads "8 of 10";
+               -- reporting the bank size would make both of those wrong.
+               LEAST(%(quiz_length)s,
+                     (SELECT count(*) FROM question q
+                       WHERE q.module_id = m.id AND NOT q.retired)) AS questions,
                (SELECT count(*) FROM question q
-                 WHERE q.module_id = m.id AND NOT q.retired) AS questions,
+                 WHERE q.module_id = m.id AND NOT q.retired) AS bank,
                e.started_at, e.completed_at,
                COALESCE(e.furthest_ordinal, 0) AS furthest_ordinal,
                COALESCE(e.last_ordinal, 0) AS last_ordinal,
@@ -178,7 +263,7 @@ def modules(learner: Dict[str, Any] = Depends(auth.current_learner)):
         WHERE m.published
         ORDER BY m.sort_order, m.id
         """,
-        {"learner": learner["id"]})
+        {"learner": learner["id"], "quiz_length": settings.quiz_length})
 
 
 @app.get("/api/modules/{slug}")
@@ -212,7 +297,12 @@ def module_detail(slug: str,
         "minutes": module["minutes"],
         "content_hash": module["content_hash"],
         "lessons": lessons,
-        "question_count": len(_questions(module["id"])),
+        # How many they will be asked, and how large a bank that is drawn
+        # from — the second is worth saying, because it is the reason a retake
+        # is not the same quiz over again.
+        "question_count": min(settings.quiz_length,
+                              len(_questions(module["id"]))),
+        "question_bank": len(_questions(module["id"])),
         "enrolment": enrolment,
     }
 
@@ -265,29 +355,20 @@ def start_attempt(slug: str,
         "AND finished_at IS NULL ORDER BY attempt_no DESC LIMIT 1",
         (learner["id"], module["id"]))
     if not attempt:
-        attempt = db.one(
-            """
-            INSERT INTO attempt (learner_id, module_id, attempt_no,
-                                 content_hash, out_of)
-            VALUES (%(learner)s, %(module)s,
-                    COALESCE((SELECT max(attempt_no) + 1 FROM attempt
-                               WHERE learner_id = %(learner)s
-                                 AND module_id = %(module)s), 1),
-                    %(hash)s, %(out_of)s)
-            RETURNING *
-            """,
-            {"learner": learner["id"], "module": module["id"],
-             "hash": module["content_hash"], "out_of": len(questions)})
+        attempt = _begin_attempt(learner, module, questions)
 
     answered = {r["question_id"] for r in db.query(
         "SELECT question_id FROM response WHERE attempt_id = %s",
         (attempt["id"],))}
+    dealt = _attempt_questions(attempt["id"])
     return {
         "attempt_id": attempt["id"],
         "attempt_no": attempt["attempt_no"],
         "out_of": attempt["out_of"],
         "answered": len(answered),
-        "questions": [content.question_for_learner(q) for q in questions
+        # In the order they were dealt, and only the ones still outstanding —
+        # so closing the tab and coming back resumes rather than restarts.
+        "questions": [content.question_for_learner(q) for q in dealt
                       if q["id"] not in answered],
     }
 
@@ -305,12 +386,19 @@ def answer(attempt_id: int, answer: Answer,
     if attempt["finished_at"]:
         raise HTTPException(status_code=409, detail="this attempt is finished")
 
+    # Constrained to this attempt's own draw. Looking the question up by
+    # ordinal alone would let somebody answer any of the hundred, including
+    # the ninety they were never asked.
     question = db.one(
-        "SELECT id, ordinal, prompt, options, correct_index, explains, teaches "
-        "FROM question WHERE module_id = %s AND ordinal = %s AND NOT retired",
-        (attempt["module_id"], answer.ordinal))
+        """
+        SELECT q.id, q.ordinal, q.prompt, q.options, q.correct_index,
+               q.explains, q.teaches
+        FROM attempt_question aq JOIN question q ON q.id = aq.question_id
+        WHERE aq.attempt_id = %s AND q.ordinal = %s AND NOT q.retired
+        """, (attempt_id, answer.ordinal))
     if not question:
-        raise HTTPException(status_code=404, detail="no such question")
+        raise HTTPException(status_code=404,
+                            detail="that question is not in this attempt")
 
     options = question["options"]
     if answer.chosen_index is not None and not (

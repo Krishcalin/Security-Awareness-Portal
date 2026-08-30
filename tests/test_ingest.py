@@ -66,17 +66,23 @@ def test_an_answer_survives_its_question_being_retired(restore_content):
 
     started = restore_content.post("/api/modules/%s/attempts" % SLUG).json()
     payload = _authored()
-    last = payload["questions"][-1]
+
+    # A question this attempt was actually DEALT — the bank is a hundred and
+    # only ten are asked, so the last one in the file is usually not among
+    # them, and answering it would be refused.
+    dealt = started["questions"][0]["ordinal"]
+    answered = next(q for q in payload["questions"] if q["ordinal"] == dealt)
     restore_content.post("/api/attempts/%d/responses" % started["attempt_id"],
-                         json={"ordinal": last["ordinal"], "chosen_index": 0})
+                         json={"ordinal": dealt, "chosen_index": 0})
     assert db.one("SELECT count(*) c FROM response")["c"] == 1
 
-    payload["questions"] = payload["questions"][:-1]
+    payload["questions"] = [q for q in payload["questions"]
+                            if q["ordinal"] != dealt]
     ingest.sync([payload])
 
     kept = db.one("SELECT asked, chosen_index FROM response")
     assert kept is not None, "re-authoring the content destroyed the answer"
-    assert kept["asked"]["prompt"] == last["prompt"]
+    assert kept["asked"]["prompt"] == answered["prompt"]
 
 
 def test_a_retired_question_is_no_longer_asked(restore_content):
@@ -94,7 +100,10 @@ def test_a_retired_question_is_no_longer_asked(restore_content):
     started = restore_content.post("/api/modules/%s/attempts" % SLUG).json()
 
     assert dropped not in [q["ordinal"] for q in started["questions"]]
-    assert started["out_of"] == len(payload["questions"])
+    # Ten drawn from what is left, not the whole bank.
+    from server.config import settings
+    assert started["out_of"] == min(settings.quiz_length,
+                                    len(payload["questions"]))
 
 
 def test_re_authoring_updates_the_content_hash(restore_content):

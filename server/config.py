@@ -42,6 +42,11 @@ class Settings:
         # that will eventually issue a certificate the server did not award.
         self.pass_mark: float = float(os.environ.get("PASS_MARK", "0.70"))
 
+        # How many questions a learner answers, drawn from the bank. The
+        # bank is much larger on purpose: ten of a hundred means the set
+        # cannot be passed around, and a retake is a different ten.
+        self.quiz_length: int = int(os.environ.get("QUIZ_LENGTH", "10"))
+
         # Certificates are sent from the CISO's address. Whether that address
         # is ALLOWED to be sent from by this server is a question for the
         # organisation's SPF and DMARC records; see README.

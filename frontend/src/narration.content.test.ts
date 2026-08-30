@@ -25,7 +25,9 @@ const narrated: Lesson[] = course.lessons.filter((l: Lesson) => l.narration)
 
 describe("the authored narration", () => {
   it("has slides to say something about", () => {
-    expect(narrated.length).toBe(20)
+    // Thirty-one slides, thirty narrated: the quiz gate is deliberately silent.
+    expect(course.lessons.length).toBe(31)
+    expect(narrated.length).toBe(30)
   })
 
   // One test per slide, so a failure names the slide rather than the loop.

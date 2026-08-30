@@ -1,12 +1,20 @@
 # Security Awareness Training — Voice-Over Scripts
 
-**20 slides · ~60 seconds each · ~145–155 words per slide (≈150 wpm delivery pace)**
+**31 slides — 30 narrated — ~60 seconds each (~150 wpm delivery pace)**
 
-Delivery notes: read at a calm, conversational pace. Pause briefly at each paragraph break. Where a script mentions the security team or helpdesk, substitute your organisation's actual contact details before recording.
+Delivery notes: read at a calm, conversational pace. Pause briefly at each
+paragraph break. Where a script mentions the security team or helpdesk,
+substitute your organisation's actual contact details before recording.
+
+> NUMBERED IN DECK ORDER. The supplied script numbered its Part 2 sections
+> two ahead of the artwork and placed Key Takeaways at 20 while the artwork
+> places Summary at 30. The pairing by meaning was unambiguous, so the
+> sections are renumbered here to match the slides they are read over. The
+> words are unchanged.
 
 ---
 
-## Slide 1 — Title: Security Awareness Training
+## Slide 1 — Security Awareness Training
 
 Welcome. Over the next few minutes we're going to talk about something that touches every single person here — security.
 
@@ -282,7 +290,157 @@ Technology stops a great deal. People stop the rest. That's your role, and it ge
 
 ---
 
-## Slide 20 — Key Takeaways
+## Slide 20 — IT and OT Security
+
+Welcome to the second part of this programme. Everything so far applied to any organisation anywhere. What follows is specific to us — to the business of generating and distributing electricity.
+
+We'll be working with two worlds. IT — the systems that run the business: email, billing, HR, reporting. And OT, operational technology — the systems that run the grid: control rooms, substations, protection relays, SCADA.
+
+Both matter. But they fail differently. When IT breaks, data is at risk. When OT breaks, power is at risk — and behind that sit hospitals, water pumping, traffic signals, and every home on our network.
+
+We'll also cover the CEA Cyber Security Regulations, which set out what every power utility in India must now do, and what that means for your daily work.
+
+Whether you sit in an office or a switchyard, this section is for you.
+
+---
+
+## Slide 21 — What is OT Security?
+
+Let's define both terms clearly, because this distinction shapes everything that follows.
+
+IT — information technology — handles data. Emails, documents, databases, business applications. Its job is to keep information confidential, accurate and available.
+
+OT — operational technology — handles the physical world. Sensors reading voltage, current and temperature. Controllers opening and closing breakers. Control room screens showing the live state of the network. Its job is to keep equipment running safely and predictably.
+
+Here's the simplest way to hold it: IT keeps data safe. OT keeps machines safe.
+
+And that changes the priority order. In IT, we usually protect confidentiality first. In OT, availability and safety come first — because a control system that stops, or misbehaves, has immediate physical consequences for equipment, for supply, and for people standing next to that equipment.
+
+Same discipline. Very different stakes.
+
+---
+
+## Slide 22 — Why the Power Sector is a Target
+
+Why would anyone attack a power utility? Three reasons.
+
+First, we are critical infrastructure. Electricity underpins everything else — hospitals, water, transport, communications, industry. That makes the grid strategically valuable to attackers who want leverage rather than money.
+
+Second, the impact is large-scale and immediate. An attack on many sectors means data is lost. An attack here means supply is lost — affecting an entire licence area at once, and generating enormous pressure on us to restore at any cost.
+
+Third, our systems are increasingly connected. Smart meters, remote substations, vendor support links, digital protection devices, IT and OT integration. Every connection adds capability — and a possible path inward.
+
+The actors range from criminal ransomware groups to state-sponsored teams who quietly establish access and simply wait.
+
+This is not theoretical. Grid operators around the world have been attacked, and India is squarely in scope.
+
+---
+
+## Slide 23 — CEA Cyber Security Regulations
+
+Which brings us to regulation.
+
+India's Central Electricity Authority has issued the Cyber Security in Power Sector Regulations — a binding framework covering every entity in the power value chain: generation, transmission, distribution and load despatch.
+
+They matter because they move cyber security from good practice to legal obligation. This is not guidance we may choose to adopt. It is a mandate, with defined roles, defined timelines, and consequences for non-compliance.
+
+The regulations span governance — who is accountable. Technical controls — how systems must be protected and separated. Incident reporting — what must be reported, to whom, and how quickly. Supply chain — what we require of our vendors. And people — training and awareness for everyone who touches these systems.
+
+That last point is exactly why you're watching this. Awareness training isn't organisational goodwill. It is a regulatory requirement, and your completion is part of our evidence.
+
+---
+
+## Slide 24 — CEA Key Requirements
+
+Five requirements worth recognising.
+
+One: appoint a CISO. A designated, accountable senior officer for cyber security, with a nominated alternate, both notified to the authorities. Accountability is named, not shared.
+
+Two: conduct cyber audits. Regular assessments by empanelled auditors covering both IT and OT, with findings tracked through to closure.
+
+Three: network segmentation. Operational systems must be separated from business networks and from the internet, with controlled and monitored crossing points.
+
+Four: incident reporting within six hours. Cyber incidents must reach the designated authorities within six hours of being noticed. Six hours is a tight clock — which means your report to the security team has to be immediate, not at the end of your shift.
+
+Five: employee awareness training, refreshed regularly, with records maintained.
+
+Four of these are the organisation's job. The fifth — and that six-hour clock — depend on you.
+
+---
+
+## Slide 25 — IT vs OT: Key Differences
+
+Understanding the differences explains why OT carries its own rules.
+
+Lifespan. An office laptop is replaced every three to five years. A protection relay or a controller may run for fifteen or twenty. Much of our OT estate predates modern security design entirely.
+
+Patching. IT systems patch monthly, often automatically. OT patching needs a planned outage, vendor validation and formal approval — because an untested update on a live control system can trip equipment.
+
+Priority. IT protects data first. OT protects availability and safety first.
+
+Protocols. OT speaks industrial languages — Modbus, DNP3, IEC 61850 — many designed decades ago with no authentication and no encryption, on the assumption that the network was isolated.
+
+Impact. An IT failure loses information. An OT failure can damage plant, interrupt supply, or endanger people.
+
+So never apply IT habits to OT systems. Follow the OT procedure.
+
+---
+
+## Slide 26 — SCADA and ICS Security
+
+SCADA and industrial control systems are the nervous system of our operations — monitoring the network and issuing the commands that keep it stable. Protecting them rests on three practices.
+
+Restrict remote access. Every connection into a control environment must be authorised, individually attributed, multi-factor authenticated, time-limited and recorded. This applies most strictly to vendors. Remote support sessions are requested, approved, supervised while active, and closed afterwards. Standing, always-on vendor access is precisely how attackers get in.
+
+Patch regularly — but the OT way. Through the change process, in a maintenance window, tested first, with a rollback plan ready. Never ad hoc, never on a live system.
+
+Monitor for anomalies. Unexpected commands, new devices, unusual traffic, logins at odd hours, a setting that changed without a work order. If it doesn't match known, authorised activity, treat it as an incident until proven otherwise.
+
+---
+
+## Slide 27 — Network Segmentation
+
+Segmentation is the single most effective OT control we have. The principle is simple: IT and OT do not talk to each other directly.
+
+Between them sits a DMZ — a buffer zone. Data that operations needs to share with the business is published into the DMZ, and business systems read it from there. Neither side reaches across into the other.
+
+Firewalls enforce that boundary, permitting only specific, approved traffic in a controlled direction. Everything else is denied by default. The most sensitive systems are isolated further still, with strictly limited or no external connectivity.
+
+What this means for you is short but important. Never create your own bridge. Don't connect a laptop to both networks. Don't plug a phone, dongle or personal modem into an OT switch for convenience. Don't set up an unapproved wireless link or remote-access tool.
+
+One shortcut can undo the entire design.
+
+---
+
+## Slide 28 — Incident Response for OT
+
+If something looks wrong in an operational system, four steps.
+
+Detect. Trust your instruments and your instincts. A reading that doesn't match physical reality. A command nobody issued. A device behaving oddly. An unfamiliar login. You know normal better than any tool does.
+
+Isolate. Contain the affected system — but only through the approved procedure and with operational authority. In OT, disconnecting the wrong thing can do more damage than the attack. Safety and grid stability come first, so coordinate. Never act alone.
+
+Report. Immediately, to the CISO office. The regulation gives us six hours to notify the authorities, and that clock starts when the incident is noticed — not when someone gets around to mentioning it.
+
+Restore safely. Recovery is planned, sequenced and verified by the response team, once the system is confirmed clean.
+
+---
+
+## Slide 29 — Your Role in OT Security
+
+Three commitments to close this section.
+
+Follow access controls. Use your own credentials, never anyone else's. Request only the access your role genuinely needs. Don't prop open doors to substations or control rooms, don't share badges, and never leave a logged-in operator console unattended.
+
+Report anomalies. You are a detection layer no sensor replaces. An odd reading, an unexpected visitor, an engineer whose work order doesn't quite fit, a device that appeared without explanation — report it. Being wrong costs a phone call. Staying quiet can cost a great deal more.
+
+Complete your cyber training. Not simply because a regulation says so, but because it keeps the first two habits current as the threats change. And yes — your completion record is part of how we demonstrate compliance.
+
+Reliable power depends on secure systems. Secure systems depend on you.
+
+---
+
+## Slide 30 — Key Takeaways
 
 Let's close with what's worth carrying out of this session.
 
@@ -299,30 +457,3 @@ None of this requires you to become a security expert. It asks for a few seconds
 You now have both. Thank you for your time — and welcome to the team that keeps this organisation secure.
 
 ---
-
-### Timing reference
-
-| Slide | Topic | Approx. words | Approx. runtime |
-|---|---|---|---|
-| 1 | Title / Welcome | 150 | 60s |
-| 2 | Why Security Matters | 148 | 59s |
-| 3 | Phishing Emails | 150 | 60s |
-| 4 | Phishing Red Flags | 146 | 58s |
-| 5 | Password Best Practices | 151 | 60s |
-| 6 | Multi-Factor Authentication | 149 | 60s |
-| 7 | Safe Web Browsing | 145 | 58s |
-| 8 | Social Engineering | 150 | 60s |
-| 9 | Vishing and Smishing | 149 | 60s |
-| 10 | What Is Ransomware? | 152 | 61s |
-| 11 | Ransomware: What To Do | 150 | 60s |
-| 12 | Physical Security | 150 | 60s |
-| 13 | Remote Work Security | 147 | 59s |
-| 14 | Public Wi-Fi Risks | 150 | 60s |
-| 15 | USB and Removable Media | 149 | 60s |
-| 16 | Data Classification | 150 | 60s |
-| 17 | Report an Incident | 150 | 60s |
-| 18 | Insider Threats | 148 | 59s |
-| 19 | Your Role in Security | 149 | 60s |
-| 20 | Key Takeaways | 150 | 60s |
-
-Total runtime: approximately 20 minutes.

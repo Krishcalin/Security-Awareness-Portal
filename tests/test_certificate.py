@@ -152,27 +152,27 @@ def sit(client, correct: int):
 
 
 def test_seventy_percent_passes(person):
-    result = sit(person, 9)                      # 9/12 = 75%
-    assert result["out_of"] == 12
-    assert result["needed"] == 9
+    result = sit(person, 7)                      # 7/10 = 70%, exactly the mark
+    assert result["out_of"] == 10
+    assert result["needed"] == 7
     assert result["pass_mark"] == pytest.approx(0.70)
     assert result["passed"] is True
     assert result["certificate"]["serial"].startswith("SAT-")
 
 
 def test_just_under_the_mark_does_not(person):
-    result = sit(person, 8)                      # 8/12 = 67%
+    result = sit(person, 6)                      # 6/10 = 60%
     assert result["passed"] is False
     assert result["certificate"] is None
 
 
 def test_the_certificate_carries_the_entra_first_and_last_name(person):
-    result = sit(person, 12)
+    result = sit(person, 10)
     assert result["certificate"]["name_printed"] == "Krishnendu De"
 
 
 def test_the_certificate_downloads_as_a_pdf(person):
-    result = sit(person, 12)
+    result = sit(person, 10)
     response = person.get("/api/certificates/%s"
                           % result["certificate"]["serial"])
     assert response.status_code == 200
@@ -183,7 +183,7 @@ def test_the_certificate_downloads_as_a_pdf(person):
 
 def test_somebody_elses_certificate_is_not_found(person):
     """The serial is quotable, so it must not also be the key to the PDF."""
-    result = sit(person, 12)
+    result = sit(person, 10)
     other = str(uuid.uuid4())
     auth.upsert_learner(entra_oid=other, email="other@example.com")
     person.cookies.set(auth.COOKIE_NAME, auth.issue(other))
@@ -195,7 +195,7 @@ def test_the_printed_name_is_frozen_at_issue(person):
     """Somebody marrying next year must not retrospectively alter the
     document they were already sent."""
     from server import db
-    result = sit(person, 12)
+    result = sit(person, 10)
     db.execute("UPDATE learner SET family_name = 'Smith'")
     again = person.get("/api/certificates/%s"
                        % result["certificate"]["serial"])
@@ -203,15 +203,15 @@ def test_the_printed_name_is_frozen_at_issue(person):
 
 
 def test_a_retake_earns_its_own_certificate(person):
-    first = sit(person, 12)
-    second = sit(person, 11)
+    first = sit(person, 10)
+    second = sit(person, 9)
     assert second["certificate"]["serial"] != first["certificate"]["serial"]
     assert second["attempt_no"] == 2
 
 
 def test_finishing_twice_does_not_issue_twice(person):
     from server import db
-    sit(person, 12)
+    sit(person, 10)
     assert db.one("SELECT count(*) c FROM certificate")["c"] == 1
 
 
@@ -221,7 +221,7 @@ def test_an_unsendable_certificate_says_so_instead_of_claiming_it_was_sent(perso
     """SMTP is not configured in the tests, which is exactly the case that
     otherwise prints 'check your inbox' at somebody and sends nothing."""
     from server import db
-    result = sit(person, 12)
+    result = sit(person, 10)
     assert result["certificate"]["will_email_to"] == ""
 
     row = db.one("SELECT emailed_at, email_error FROM certificate WHERE serial = %s",
@@ -233,7 +233,7 @@ def test_an_unsendable_certificate_says_so_instead_of_claiming_it_was_sent(perso
 def test_a_failure_to_send_does_not_cost_anybody_their_certificate(person):
     """Mail is a copy. The certificate is earned, recorded and downloadable
     whether or not anything ever leaves the building."""
-    result = sit(person, 12)
+    result = sit(person, 10)
     assert person.get("/api/certificates/%s"
                       % result["certificate"]["serial"]).status_code == 200
 

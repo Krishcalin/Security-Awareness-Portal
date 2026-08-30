@@ -30,6 +30,9 @@ export interface ModuleSummary {
    *  because then there are two answers to the same question. */
   passed: boolean
   certificate_serial: string | null
+  /** How many are in the bank the ten are drawn from. `questions` above is
+   *  what a learner actually answers. */
+  bank: number
 }
 
 export interface Lesson {
@@ -60,6 +63,7 @@ export interface ModuleDetail {
   content_hash: string
   lessons: Lesson[]
   question_count: number
+  question_bank: number
   enrolment: Enrolment | null
 }
 

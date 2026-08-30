@@ -3,10 +3,14 @@
 A narrated security awareness course that measures whether people learned
 something, rather than whether they reached the last page.
 
-Twenty-one slides with voice-over and a twelve-question knowledge check.
-Sign-in is through Microsoft Entra ID. Pass at 70% and a certificate is issued
-in your name and emailed from the CISO's office. Leave halfway through and you
-come back to the slide you left.
+Thirty-one slides with voice-over, in two parts: general security for
+everyone, then IT and OT security for power generation and distribution,
+including the CEA Cyber Security Regulations.
+
+At the end, **ten questions drawn from a bank of 100**. Sign-in is through
+Microsoft Entra ID. Pass at 70% and a certificate is issued in your name and
+emailed from the CISO's office. Leave halfway through and you come back to the
+slide you left.
 
 ---
 
@@ -25,6 +29,7 @@ number:
 |---|---|
 | `enrolment` | did this person open it, and how far did they get |
 | `attempt` / `response` | did they answer correctly, on which try, and how fast |
+| `attempt_question` | which ten this attempt was dealt, and in what order |
 | `question_stat` | does this question tell anybody apart, or does everyone get it right |
 
 That last row is the portal reporting on itself. **A question that everybody
@@ -91,8 +96,8 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 186, needs the database from docker compose
-cd frontend && npm test         # 74
+python -m pytest                # 194, needs the database from docker compose
+cd frontend && npm test         # 84
 ```
 
 ---
@@ -100,7 +105,7 @@ cd frontend && npm test         # 74
 ## How it is put together
 
 ```
-assets/slides/       the artwork, 21 PNGs
+assets/slides/       the artwork, 31 PNGs
 assets/certificate/  the certificate artwork (PNG master + derived JPEG)
 assets/brand/        the logo (PNG master + derived lockup, mark, favicon)
 assets/narration/    recorded narration, and where each word falls in it
@@ -232,6 +237,35 @@ script. The transcript is on screen throughout regardless, and the word being
 spoken is highlighted — which is also what makes the course usable without
 hearing it.
 
+
+
+---
+
+## The knowledge check
+
+A bank of **100 questions**; each learner answers **ten of them**, dealt when
+the attempt starts.
+
+**No two attempts are dealt the same ten in the same order.** That is enforced
+by a unique index on a fingerprint of the ordered draw, not left to
+probability: a repeat cannot be stored, so the draw is simply taken again.
+There are about 6×10¹⁹ possible ordered tens, so it is not expected to fire —
+the constraint is there so the guarantee does not rest on that expectation
+being right.
+
+**The draw is recorded, not recomputed.** Somebody who closes the tab half way
+through comes back to the same ten in the same order. A fresh draw would
+strand the answers they had already given, which cannot be given again in the
+same attempt.
+
+**A retake is a different ten**, so a second score measures the material rather
+than memory of the first set's answers. And a question that was never dealt to
+an attempt cannot be answered in it — ninety of the hundred were not asked, and
+without that check the question number is just a value a client can put
+anything into.
+
+Set `QUIZ_LENGTH` to change how many are asked. The pass mark applies to what
+was asked, so ten questions at 70% means seven.
 
 ---
 

@@ -19,7 +19,7 @@ import pytest
 import tools.build_content as bc
 
 ROOT = Path(__file__).resolve().parents[1]
-SLIDES = set(range(1, 22))
+SLIDES = set(range(1, 32))
 
 
 @pytest.fixture(scope="module")
@@ -61,7 +61,7 @@ def refusal(damaged, mutate) -> str:
 # --------------------------------------------------------------------------
 
 def test_the_authored_check_is_usable(damaged):
-    assert len(damaged()) == 12
+    assert len(damaged()) == 100
 
 
 def test_built_module_is_not_stale():
@@ -150,7 +150,8 @@ def test_unused_answer_position_is_refused(damaged):
 
 def test_dominant_answer_position_is_refused(damaged):
     def mostly_one(qs):
-        for question in qs[:7]:
+        # More than half the bank, which is what the guard is about.
+        for question in qs[:60]:
             question["correct_index"] = 1
     message = refusal(damaged, mostly_one)
     assert "guessing it beats knowing" in message

@@ -343,3 +343,105 @@ def test_a_finished_module_does_not_drag_them_back_into_it(signed_in):
     started, _ = _first_question(signed_in)
     signed_in.post("/api/attempts/%d/finish" % started["attempt_id"])
     assert signed_in.get("/api/resume").json()["path"] == "/"
+
+
+# ── ten of a hundred ───────────────────────────────────────────────────────
+
+def test_an_attempt_draws_ten_from_the_bank(signed_in):
+    from server import db
+    from server.config import settings
+    bank = db.one("SELECT count(*) c FROM question WHERE NOT retired")["c"]
+    assert bank == 100, "the bank is meant to be a hundred"
+
+    started = signed_in.post("/api/modules/%s/attempts" % SLUG).json()
+    assert started["out_of"] == settings.quiz_length == 10
+    assert len(started["questions"]) == 10
+    ordinals = [q["ordinal"] for q in started["questions"]]
+    assert len(set(ordinals)) == 10, "the same question was dealt twice"
+
+
+def test_the_draw_is_recorded_so_a_resume_does_not_reshuffle(signed_in):
+    """Somebody who closes the tab half way through must come back to the same
+    ten in the same order. A fresh draw would strand the answers they already
+    gave, which cannot be given again in the same attempt."""
+    first = signed_in.post("/api/modules/%s/attempts" % SLUG).json()
+    again = signed_in.post("/api/modules/%s/attempts" % SLUG).json()
+    assert first["attempt_id"] == again["attempt_id"]
+    assert [q["ordinal"] for q in first["questions"]] == \
+        [q["ordinal"] for q in again["questions"]]
+
+
+def test_two_learners_are_never_dealt_the_same_ten_in_the_same_order(clean):
+    """Asked for explicitly. It is enforced by a unique index rather than left
+    to probability, so this checks the mechanism as well as the outcome."""
+    import uuid
+    from server import auth, db
+
+    hands = []
+    for _ in range(12):
+        oid = str(uuid.uuid4())
+        auth.upsert_learner(entra_oid=oid, email="%s@example.com" % oid[:8])
+        clean.cookies.set(auth.COOKIE_NAME, auth.issue(oid))
+        started = clean.post("/api/modules/%s/attempts" % SLUG).json()
+        hands.append(tuple(q["ordinal"] for q in started["questions"]))
+
+    assert len(set(hands)) == len(hands), "two learners got the same hand"
+    # And the mechanism: every attempt carries a fingerprint, and they differ.
+    prints = [r["question_set"] for r in db.query(
+        "SELECT question_set FROM attempt")]
+    assert all(prints) and len(set(prints)) == len(prints)
+
+
+def test_the_draw_is_not_the_same_questions_every_time(clean):
+    """A 'random' draw that always returns the first ten would pass every
+    other test here."""
+    import uuid
+    from server import auth
+    seen = set()
+    for _ in range(8):
+        oid = str(uuid.uuid4())
+        auth.upsert_learner(entra_oid=oid, email="%s@example.com" % oid[:8])
+        clean.cookies.set(auth.COOKIE_NAME, auth.issue(oid))
+        started = clean.post("/api/modules/%s/attempts" % SLUG).json()
+        seen |= {q["ordinal"] for q in started["questions"]}
+    assert len(seen) > 30, "the draw barely moves: only %d questions ever appeared" % len(seen)
+
+
+def test_a_retake_is_dealt_a_different_hand(signed_in):
+    """Otherwise a retake is the same ten again, and the second score measures
+    memory of the answers rather than knowledge of the material."""
+    first = signed_in.post("/api/modules/%s/attempts" % SLUG).json()
+    signed_in.post("/api/attempts/%d/finish" % first["attempt_id"])
+    second = signed_in.post("/api/modules/%s/attempts" % SLUG).json()
+    assert second["attempt_no"] == 2
+    assert [q["ordinal"] for q in first["questions"]] != \
+        [q["ordinal"] for q in second["questions"]]
+
+
+def test_a_question_not_dealt_to_this_attempt_cannot_be_answered(signed_in):
+    """Ninety of the hundred were never asked. Without this the ordinal is
+    just a number a learner can put anything into."""
+    started = signed_in.post("/api/modules/%s/attempts" % SLUG).json()
+    dealt = {q["ordinal"] for q in started["questions"]}
+    not_dealt = next(n for n in range(1, 101) if n not in dealt)
+
+    refused = signed_in.post(
+        "/api/attempts/%d/responses" % started["attempt_id"],
+        json={"ordinal": not_dealt, "chosen_index": 0})
+    assert refused.status_code == 404
+    assert "not in this attempt" in refused.json()["detail"]
+
+
+def test_the_module_list_reports_what_a_learner_answers(signed_in):
+    """Not the bank size: the card says "10 questions" and a score reads
+    "8 of 10"; reporting 100 would make both of those wrong."""
+    row = next(m for m in signed_in.get("/api/modules").json()
+               if m["slug"] == SLUG)
+    assert row["questions"] == 10
+    assert row["bank"] == 100
+
+
+def test_the_module_page_says_both_numbers(signed_in):
+    body = signed_in.get("/api/modules/" + SLUG).json()
+    assert body["question_count"] == 10
+    assert body["question_bank"] == 100

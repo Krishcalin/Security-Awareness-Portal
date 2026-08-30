@@ -108,7 +108,11 @@ export function Home() {
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <ListChecks size={15} aria-hidden />
+                      {/* Both numbers, because "drawn from 100" is the reason
+                          a retake is not the same quiz over again. */}
                       {module.questions} questions
+                      {module.bank > module.questions &&
+                        `, drawn from ${module.bank}`}
                     </span>
                     <span className={status.tone}>{status.label}</span>
                   </div>
