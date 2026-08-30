@@ -42,4 +42,5 @@ Thumbs.db
 # the mp3 files, their word tracks and manifest.json ARE the deployment
 # artefact and belong in the repository — about 10MB, which is the point at
 # which Git LFS stops being optional. Relax this rule then.
-assets/narration/
+assets/narration/*
+!assets/narration/README.md

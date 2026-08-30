@@ -240,6 +240,15 @@ def stale(module: dict, manifest: dict, folder: Path) -> list[dict]:
 def record(module: dict, backend, folder: Path, force: bool) -> dict:
     folder.mkdir(parents=True, exist_ok=True)
     manifest = load_manifest(folder)
+    if manifest.get("backend") == "imported" and not force:
+        # Somebody supplied these recordings. Synthesising over the top of
+        # them — because a hash happened not to match, say — would silently
+        # replace a real voice with a machine one, and the only way anybody
+        # would find out is by listening to the whole course again.
+        raise SystemExit(
+            "the narration for %s was supplied, not generated.\n"
+            "  To re-read the supplied files: python -m tools.import_narration\n"
+            "  To synthesise over the top anyway: --force" % folder.name)
     if force or manifest.get("backend") != backend.name:
         # A half-and-half course, recorded in two voices, is worse than either.
         manifest = {"slides": {}}

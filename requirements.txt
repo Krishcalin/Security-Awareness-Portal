@@ -12,11 +12,12 @@ pillow>=10.0         # derives the certificate render source
 # audience, the expiry and the nonce; every one of those is somewhere a
 # hand-rolled version quietly accepts a token it should not.
 msal>=1.31
+mutagen>=1.47        # reads how long a supplied recording runs, without ffmpeg
 jinja2>=3.1          # renders the sign-in page, with autoescaping
 
-# Recording the narration with Azure Neural TTS. Optional: the `sapi`
-# backend needs nothing, and the portal falls back to the browser's own
-# synthesiser for any slide with no recording.
+# Optional, only for tools/build_narration.py --backend azure. Recordings are
+# normally supplied and imported instead; the portal falls back to the
+# browser's own synthesiser for any slide with no recording.
 #   pip install azure-cognitiveservices-speech
 
 # Tests
