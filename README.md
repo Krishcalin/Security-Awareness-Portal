@@ -5,7 +5,11 @@ something, rather than whether they reached the last page.
 
 Thirty-one slides with voice-over, in two parts: general security for
 everyone, then IT and OT security for power generation and distribution,
-including the CEA Cyber Security Regulations.
+including the CEA Cyber Security Regulations. About 45 minutes.
+
+Every slide carries a worked example from a documented incident — the Ukraine
+grid blackouts, Colonial Pipeline, Norsk Hydro, Stuxnet, AIIMS Delhi — because
+the examples are the part people remember.
 
 At the end, **ten questions drawn from a bank of 100**. Sign-in is through
 Microsoft Entra ID. Pass at 70% and a certificate is issued in your name and
@@ -230,14 +234,15 @@ utterance, split with and without a lead-in, longer and shorter gaps, queued
 back to back — against any installed voice, so the question is settled by
 listening rather than by argument. A test asserts its variant C is exactly
 what the portal ships. Those pauses are part of how long a slide takes, so the build
-counts them — the course went from a reported nineteen minutes to a truthful
-twenty-one the moment they were added.
+counts them — adding them moved the reported figure by two minutes, and it
+moved again when the scripts gained their worked examples. Nobody re-checks a
+duration written into a page, so it is read from the content instead.
 
 The splitter is deliberately simple, because the script is: British prose with
 no abbreviations, no decimals and no ellipses. A test fails if any of those
 ever appear, rather than letting "e.g." quietly become two sentences with a
-pause in the middle. Another runs the splitter over all twenty slides and
-checks the pieces add back up to exactly the script.
+pause in the middle. Another runs the splitter over every narrated slide
+and checks the pieces add back up to exactly the script.
 
 On a machine with no voices installed the player **says so** and shows the
 script. The transcript is on screen throughout regardless, and the word being
@@ -344,7 +349,8 @@ because it is the one screen somebody sees while they have no session — the
 app cannot render it without one. It does **not** bounce to Microsoft on its
 own: an automatic redirect gives nobody a chance to see whose portal this is,
 and "I followed a link and ended up on a Microsoft password box" is the shape
-of the thing this course spends twenty minutes warning people about. The
+of the thing this course spends three quarters of an hour warning people
+about. The
 button goes to `/auth/start`, which is what talks to Entra.
 
 Form on the left, brand on the right — and **the brand panel is second in the
