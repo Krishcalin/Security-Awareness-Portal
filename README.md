@@ -96,8 +96,8 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 194, needs the database from docker compose
-cd frontend && npm test         # 84
+python -m pytest                # 213, needs the database from docker compose
+cd frontend && npm test         # 92
 ```
 
 ---
@@ -113,6 +113,7 @@ data/source/         the voice-over script, and the knowledge check
 data/modules/        built content (generated — do not hand-edit)
 tools/build_content  pairs artwork with script; refuses to emit a mismatch
 server/              FastAPI, Postgres, Entra sign-in
+server/reporting.py  what the training shows, and what it refuses to say
 server/templates/    the sign-in page, the one screen the SPA cannot render
 frontend/            React + Vite; the player and the check
 ```
@@ -367,6 +368,69 @@ disappear, so a dark panel would hide half the wordmark to honour a preference
 nobody expressed about a logo. The shield alone survives either ground, so
 that is what the app's own header uses.
 
+
+---
+
+## The reporting view
+
+`/report/<module>` — for whoever has to act on this. Everything the schema has
+been carefully recording since the first commit is finally read here.
+
+**It exists to avoid producing one number.** "94% trained" fits on a slide,
+gets pasted into a board pack, and is read as evidence that people can spot a
+phish — when all it says is that they reached the last page. So the headline is
+six figures that are never combined:
+
+| | |
+|---|---|
+| never opened it | separate from the people who tried and stopped |
+| stopped part way | with the slide they stopped on |
+| reached the end | saw every slide |
+| passed the check | could answer questions about them |
+| **passed first time** | the figure that carries the most evidence, and the one a single number always loses |
+
+**A rate from a handful of answers is not reported at all.** "100% correct"
+from three attempts is noise wearing the costume of a statistic, and it is
+exactly the false confidence this product exists to avoid. Below twenty
+answers the count is shown and the proportion is not.
+
+**It reports on the questions, not only on the people.** A question everybody
+answers correctly cannot tell somebody who understands from somebody who does
+not, so it is surfaced as a problem with the *question*. One almost nobody gets
+right names the slide it tests, because that is usually where the fault is.
+
+A consequence of the hundred-question bank worth knowing: per-question
+statistics take a while to become meaningful. Twenty answers on each of a
+hundred questions is two thousand answers — around two hundred learners. The
+bank buys unpredictability and pays for it in statistical power.
+
+**Certificates that never left are visible.** An email that bounced and one
+that was never attempted look identical from the outside, and both look like a
+certificate that arrived.
+
+`Export the record` produces the CSV a regulator asks for, with completion and
+result in separate columns and no "trained" column at all.
+
+### Who can see it
+
+Nobody, until they are granted the role:
+
+```bash
+docker compose exec app python -m server.grant --email ciso@example.com --role admin
+docker compose exec app python -m server.grant --list
+```
+
+From the shell, deliberately — a privilege the application can grant is one bug
+away from a learner granting it to themselves. Where the tenant is configured
+for it, `ENTRA_ADMIN_GROUP` does the same job from the directory, which is
+better because it is withdrawn when somebody changes job. A sign-in that
+carries no group claim never demotes somebody granted from the shell.
+
+Every report endpoint checks for itself and answers **404** to anybody else — a
+403 would confirm the screens exist and are worth coming back for. The sign-in
+page says plainly that progress, score and attempt number are recorded and that
+the security team can see them.
+
 ---
 
 ## What the code refuses to do
@@ -408,6 +472,10 @@ server and nowhere else. A threshold the client also holds is one the two can
 disagree about, and the disagreement shows up as a certificate the server never
 awarded. Somebody else's certificate is a 404, because the serial is quotable
 and must not also be the key to the PDF.
+
+**The report never reduces to one number.** Not a stylistic preference: the
+single figure is what makes awareness training worthless as evidence, and it is
+asserted by tests rather than left to whoever edits the screen next.
 
 **Sign-in is scoped to your tenant.** The authority is the tenant id, never
 `common`, and the `tid` claim is checked as well. People are matched on the

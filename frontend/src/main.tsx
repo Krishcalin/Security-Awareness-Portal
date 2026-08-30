@@ -7,6 +7,7 @@ import { Shell } from "./routes/Shell"
 import { Home } from "./routes/Home"
 import { Player } from "./routes/Player"
 import { Check } from "./routes/Check"
+import { Report } from "./routes/Report"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -16,6 +17,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/" element={<Home />} />
           <Route path="/module/:slug" element={<Player />} />
           <Route path="/module/:slug/check" element={<Check />} />
+          <Route path="/report/:slug" element={<Report />} />
         </Route>
       </Routes>
     </BrowserRouter>

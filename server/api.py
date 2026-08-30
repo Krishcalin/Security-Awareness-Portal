@@ -15,6 +15,7 @@ is a new attempt, numbered, and the number is kept.
 """
 from __future__ import annotations
 
+import csv
 import hashlib
 import io as _io
 import json
@@ -36,7 +37,8 @@ from pydantic import BaseModel, Field
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from server import auth, certificate, content, db, entra, ingest, mailer
+from server import (auth, certificate, content, db, entra, ingest, mailer,
+                    reporting)
 from server.config import settings
 
 log = logging.getLogger(__name__)
@@ -212,7 +214,11 @@ def health() -> Dict[str, Any]:
 def me(learner: Dict[str, Any] = Depends(auth.current_learner)):
     return {"id": learner["id"], "email": learner["email"],
             "display_name": learner["display_name"],
-            "department": learner["department"]}
+            "department": learner["department"],
+            # So the app knows whether to offer the reporting screen at all.
+            # It is not what authorises it — every report endpoint checks for
+            # itself — it only decides whether a link is drawn.
+            "role": learner.get("role", "learner")}
 
 
 @app.get("/api/modules")
@@ -613,6 +619,82 @@ def download_certificate(serial: str,
                  'attachment; filename="Security-Awareness-Certificate-%s.pdf"'
                  % row["serial"]})
 
+# ── reporting ──────────────────────────────────────────────────────────────
+#
+# Everything behind `require_admin`, which 404s rather than 403s for anybody
+# else. These are individual results, not anonymous statistics, and the
+# sign-in page says so before anybody starts.
+
+@app.get("/api/report/{slug}")
+def report(slug: str,
+           admin: Dict[str, Any] = Depends(auth.require_admin)):
+    """Everything except the per-person list, which is fetched separately
+    because it is the only part that grows with the organisation."""
+    module = _module(slug)
+    return {
+        "module": {"slug": module["slug"], "title": module["title"],
+                   "content_hash": module["content_hash"]},
+        # Several numbers rather than one. The single figure everybody wants
+        # is "94% trained", and it is the reason this whole product exists.
+        "summary": reporting.summary(module["id"]),
+        "questions": reporting.questions(module["id"]),
+        "slides": reporting.slides(module["id"]),
+        "departments": reporting.departments(module["id"]),
+        "delivery": reporting.delivery(module["id"]),
+        "thresholds": {
+            "min_answers": reporting.MIN_ANSWERS,
+            "not_discriminating": reporting.NOT_DISCRIMINATING,
+            "material_failed": reporting.MATERIAL_FAILED,
+            "pass_mark": settings.pass_mark,
+        },
+    }
+
+
+@app.get("/api/report/{slug}/people")
+def report_people(slug: str,
+                  admin: Dict[str, Any] = Depends(auth.require_admin)):
+    return reporting.people(_module(slug)["id"])
+
+
+@app.get("/api/report/{slug}/export.csv")
+def report_export(slug: str,
+                  admin: Dict[str, Any] = Depends(auth.require_admin)):
+    """The record a regulator asks for.
+
+    Completion and result are separate columns and stay that way. A single
+    "trained" column is the thing this file is designed not to be, because it
+    is what gets pasted into a board pack and read as evidence of awareness.
+    """
+    module = _module(slug)
+    buffer = _io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow([
+        "email", "name", "department",
+        "started", "furthest_slide", "reached_end",
+        "attempts", "latest_score", "out_of",
+        "passed", "passed_on_attempt", "certificate", "certificate_issued",
+    ])
+    for row in reporting.people(module["id"]):
+        writer.writerow([
+            row["email"], row["display_name"], row["department"],
+            row["started_at"].isoformat() if row["started_at"] else "",
+            row["furthest_ordinal"],
+            row["completed_at"].isoformat() if row["completed_at"] else "",
+            row["attempts"] or 0,
+            "" if row["latest_score"] is None else row["latest_score"],
+            "" if row["out_of"] is None else row["out_of"],
+            "yes" if row["certificate"] else "no",
+            row["passed_on_attempt"] or "",
+            row["certificate"] or "",
+            row["issued_at"].isoformat() if row["issued_at"] else "",
+        ])
+    filename = "%s-training-record-%s.csv" % (
+        module["slug"], datetime.now(timezone.utc).date().isoformat())
+    return StreamingResponse(
+        _io.BytesIO(buffer.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="%s"' % filename})
+
 # ── signing in ─────────────────────────────────────────────────────────────
 # Declared before the catch-all below, or the front page would be served for
 # every one of these.
@@ -711,7 +793,8 @@ def sign_in_callback(request: Request) -> Response:
     learner = auth.upsert_learner(
         entra_oid=identity["oid"], email=identity["email"],
         upn=identity["upn"], display_name=identity["display_name"],
-        given_name=identity["given_name"], family_name=identity["family_name"])
+        given_name=identity["given_name"], family_name=identity["family_name"],
+        role=identity.get("role"))
 
     # Straight back to where they left off. Somebody who signed out halfway
     # through slide twelve should not have to find their way back to slide

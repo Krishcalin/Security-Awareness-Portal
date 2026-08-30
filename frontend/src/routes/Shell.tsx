@@ -52,6 +52,17 @@ export function Shell() {
             <span>Security Awareness</span>
           </Link>
           <div className="ml-auto flex items-center gap-4 text-sm">
+            {/* Drawn only for somebody who may see it. The link is not what
+                authorises the report — every one of those endpoints checks
+                for itself, and returns 404 to anybody else. */}
+            {learner?.role === "admin" && (
+              <Link
+                to="/report/security-awareness-essentials"
+                className="text-muted hover:text-text"
+              >
+                Reporting
+              </Link>
+            )}
             {learner && (
               <span className="text-muted hidden sm:inline">
                 {learner.display_name || learner.email}

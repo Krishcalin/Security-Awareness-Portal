@@ -301,3 +301,24 @@ ALTER TABLE attempt ADD COLUMN IF NOT EXISTS
 
 CREATE UNIQUE INDEX IF NOT EXISTS attempt_question_set_idx
     ON attempt (module_id, question_set) WHERE question_set <> '';
+
+-- ── who may see everybody's results ────────────────────────────────────────
+--
+-- Until now every signed-in person could see their own record and nothing
+-- else, so there was no such thing as a privileged view. A report changes
+-- that, and the boundary is worth being explicit about: these are individual
+-- results, not anonymous statistics, and the sign-in page says so.
+--
+-- Granted from the shell (`python -m server.grant`) or, where the tenant is
+-- configured for it, by membership of an Entra group. Never from inside the
+-- application: an admin flag that the application itself can set is one bug
+-- away from a learner setting it.
+ALTER TABLE learner ADD COLUMN IF NOT EXISTS
+    role text NOT NULL DEFAULT 'learner';
+
+ALTER TABLE learner DROP CONSTRAINT IF EXISTS learner_role_known;
+ALTER TABLE learner ADD CONSTRAINT learner_role_known
+    CHECK (role IN ('learner', 'admin'));
+
+CREATE INDEX IF NOT EXISTS learner_role_idx ON learner (role)
+    WHERE role <> 'learner';

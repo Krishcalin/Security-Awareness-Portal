@@ -1,5 +1,6 @@
 import type {
-  Learner, ModuleDetail, ModuleSummary, Result, Reveal, StartedAttempt,
+  Learner, ModuleDetail, ModuleSummary, Report, ReportPerson, Result, Reveal,
+  StartedAttempt,
 } from "./types"
 
 export class ApiError extends Error {
@@ -63,7 +64,15 @@ export const api = {
 
   /** Where this person left off, decided on the server. */
   resume: () => request<{ path: string }>("/api/resume"),
+
+  report: (slug: string) => request<Report>(`/api/report/${slug}`),
+  reportPeople: (slug: string) =>
+    request<ReportPerson[]>(`/api/report/${slug}/people`),
 }
+
+/** A plain link so the browser saves the file. */
+export const reportExportUrl = (slug: string) =>
+  `/api/report/${encodeURIComponent(slug)}/export.csv`
 
 /** A plain link, so the browser downloads it rather than the app holding a
  *  700KB PDF in memory to hand back to the browser anyway. */

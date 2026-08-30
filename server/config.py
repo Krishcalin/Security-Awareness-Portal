@@ -29,6 +29,10 @@ class Settings:
         self.entra_client_id: str = os.environ.get("ENTRA_CLIENT_ID", "")
         self.entra_client_secret: str = os.environ.get("ENTRA_CLIENT_SECRET", "")
         self.entra_redirect_uri: str = os.environ.get("ENTRA_REDIRECT_URI", "")
+        # Object id of an Entra group whose members may see the reports.
+        # Unset means the role is granted from the shell only.
+        self.entra_admin_group: str = os.environ.get(
+            "ENTRA_ADMIN_GROUP", "")
 
         # Secure by default, and switched OFF explicitly for local http. The
         # other way round is a cookie that silently travels in clear the first

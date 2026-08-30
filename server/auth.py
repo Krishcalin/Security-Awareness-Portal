@@ -99,7 +99,8 @@ def read(token: str, now: Optional[float] = None) -> Optional[Dict[str, Any]]:
 
 def upsert_learner(entra_oid: str, email: str, upn: str = "",
                    display_name: str = "", department: str = "",
-                   given_name: str = "", family_name: str = "") -> Dict[str, Any]:
+                   given_name: str = "", family_name: str = "",
+                   role: Optional[str] = None) -> Dict[str, Any]:
     """Find or create the person behind an Entra identity.
 
     Matched on `entra_oid`, which Entra guarantees is immutable, and never on
@@ -110,8 +111,10 @@ def upsert_learner(entra_oid: str, email: str, upn: str = "",
     return db.one(
         """
         INSERT INTO learner (entra_oid, email, upn, display_name, department,
-                             given_name, family_name)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                             given_name, family_name, role)
+        VALUES (%(entra_oid)s, %(email)s, %(upn)s, %(display_name)s,
+                %(department)s, %(given_name)s, %(family_name)s,
+                COALESCE(%(role)s, 'learner'))
         ON CONFLICT (entra_oid) DO UPDATE SET
             email        = EXCLUDED.email,
             upn          = EXCLUDED.upn,
@@ -123,12 +126,30 @@ def upsert_learner(entra_oid: str, email: str, upn: str = "",
             given_name   = COALESCE(NULLIF(EXCLUDED.given_name, ''),
                                     learner.given_name),
             family_name  = COALESCE(NULLIF(EXCLUDED.family_name, ''),
-                                    learner.family_name)
+                                    learner.family_name),
+            -- Only set when the caller has something to say about it. A
+            -- sign-in that carries no group claim must not silently demote
+            -- somebody who was granted the role from the shell.
+            role         = COALESCE(%(role)s, learner.role)
         RETURNING id, email, entra_oid, upn, display_name, department,
-                  given_name, family_name
+                  given_name, family_name, role
         """,
-        (entra_oid, email, upn, display_name, department,
-         given_name, family_name))
+        {"entra_oid": entra_oid, "email": email, "upn": upn,
+         "display_name": display_name, "department": department,
+         "given_name": given_name, "family_name": family_name, "role": role})
+
+
+def require_admin(request: Request) -> Dict[str, Any]:
+    """FastAPI dependency: somebody allowed to see everybody's results.
+
+    404 rather than 403 for a learner who is not one. A 403 confirms the
+    reporting screens exist and are worth coming back for; there is no reason
+    to tell somebody that.
+    """
+    learner = current_learner(request)
+    if learner.get("role") != "admin":
+        raise HTTPException(status_code=404, detail="not found")
+    return learner
 
 
 def current_learner(request: Request) -> Dict[str, Any]:
@@ -138,7 +159,7 @@ def current_learner(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="not signed in")
     learner = db.one(
         "SELECT id, email, entra_oid, upn, display_name, department, "
-        "given_name, family_name FROM learner WHERE entra_oid = %s",
+        "given_name, family_name, role FROM learner WHERE entra_oid = %s",
         (claims["oid"],))
     if not learner:
         # A validly signed session for somebody who is no longer in the

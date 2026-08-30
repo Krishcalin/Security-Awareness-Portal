@@ -116,3 +116,15 @@ def test_the_pause_lengths_in_the_readme_are_the_ones_in_the_code():
     assert "%dms after a full stop" % bc.PAUSE_MS["sentence"] in README
     assert "%dms after a colon" % bc.PAUSE_MS["clause"] in README
     assert "%dms between" % bc.PAUSE_MS["paragraph"] in README
+
+
+def test_the_reporting_thresholds_in_the_readme_are_the_ones_in_the_code():
+    from server import reporting
+    assert "Below twenty\nanswers" in README
+    assert reporting.MIN_ANSWERS == 20
+
+
+def test_the_grant_command_the_readme_names_exists():
+    from server import grant
+    assert "server.grant --email" in README
+    assert "admin" in grant.ROLES

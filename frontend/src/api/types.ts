@@ -119,4 +119,74 @@ export interface Learner {
   email: string
   display_name: string
   department: string
+  /** Decides whether the reporting link is drawn. It is NOT what authorises
+   *  the reports — every one of those endpoints checks for itself. */
+  role: "learner" | "admin"
+}
+
+export interface ReportQuestion {
+  question_id: number
+  ordinal: number
+  prompt: string
+  teaches: number | null
+  teaches_title: string | null
+  answered: number
+  correct: number
+  /** Null below the floor where a proportion would be noise. */
+  correct_rate: number | null
+  guessed: number
+  verdict: string
+}
+
+export interface ReportSlide {
+  ordinal: number
+  title: string
+  stopped_here: number
+  reached: number
+}
+
+export interface ReportPerson {
+  id: number
+  email: string
+  display_name: string
+  department: string
+  started_at: string | null
+  completed_at: string | null
+  furthest_ordinal: number
+  attempts: number | null
+  latest_score: number | null
+  out_of: number | null
+  certificate: string | null
+  issued_at: string | null
+  passed_on_attempt: number | null
+}
+
+export interface Report {
+  module: { slug: string; title: string; content_hash: string }
+  /** Six numbers, never one. See server/reporting.py. */
+  summary: {
+    people: number
+    never_opened: number
+    opened: number
+    stopped_partway: number
+    reached_end: number
+    passed: number
+    passed_first_time: number
+  }
+  questions: ReportQuestion[]
+  slides: ReportSlide[]
+  departments: { department: string; people: number; reached_end: number; passed: number }[]
+  delivery: {
+    issued: number
+    emailed: number
+    failed: number
+    not_attempted: number
+    failures: { serial: string; email: string; email_error: string }[]
+  }
+  thresholds: {
+    min_answers: number
+    not_discriminating: number
+    material_failed: number
+    pass_mark: number
+  }
 }

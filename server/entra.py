@@ -125,8 +125,17 @@ def complete(flow: Dict[str, Any], query: Dict[str, Any]) -> Dict[str, Any]:
     if not oid:
         raise SignInRefused("Microsoft did not return an object id for this account")
 
+    # Only claimed when the tenant is configured to say so. Without the
+    # group, `role` stays None and whatever is already on the record wins —
+    # so a missing claim never quietly demotes somebody.
+    role = None
+    if settings.entra_admin_group:
+        groups = claims.get("groups") or []
+        role = "admin" if settings.entra_admin_group in groups else "learner"
+
     return {
         "oid": oid,
+        "role": role,
         # Separately, not parsed out of `name`: a display name is whatever the
         # directory has been told to show, and splitting "de, Krishnendu
         # (Security)" on a space puts the wrong thing on a certificate.
