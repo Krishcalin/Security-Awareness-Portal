@@ -98,3 +98,9 @@ def test_the_dev_signin_gate_named_in_the_readme_is_the_one_in_the_code():
     source = inspect.getsource(Settings.__init__)
     assert "ALLOW_DEV_SIGNIN" in source
     assert "ALLOW_DEV_SIGNIN" in README
+
+
+def test_the_brand_tool_the_readme_names_exists_and_runs():
+    from tools import build_brand_assets
+    assert "tools/build_brand_assets.py" in README
+    assert build_brand_assets.main(["--check"]) == 0

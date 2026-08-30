@@ -100,15 +100,23 @@ def test_a_path_inside_the_site_is_kept(candidate):
 
 # ── starting ───────────────────────────────────────────────────────────────
 
-def test_login_says_so_when_entra_is_not_configured(clean):
-    response = clean.get("/auth/login", follow_redirects=False)
-    assert response.status_code == 503
-    assert "ENTRA_" in response.text
+def test_the_sign_in_page_says_so_when_entra_is_not_configured(clean):
+    """The page renders either way — it is the one screen somebody who cannot
+    get in is looking at, so it has to explain rather than 500 at them."""
+    page = clean.get("/auth/login", follow_redirects=False)
+    assert page.status_code == 200
+    assert "ENTRA_" in page.text
+    assert "Sign in with Microsoft" not in page.text
+
+    # And the thing that would actually go to Microsoft refuses.
+    start = clean.get("/auth/start", follow_redirects=False)
+    assert start.status_code == 503
+    assert "ENTRA_" in start.text
 
 
-def test_login_sends_the_browser_to_microsoft(clean, microsoft):
+def test_starting_sends_the_browser_to_microsoft(clean, microsoft):
     microsoft()
-    response = clean.get("/auth/login", follow_redirects=False)
+    response = clean.get("/auth/start", follow_redirects=False)
     assert response.status_code == 307
     assert response.headers["location"].startswith(
         "https://login.microsoftonline.com/")
@@ -121,7 +129,7 @@ def test_login_sends_the_browser_to_microsoft(clean, microsoft):
 
 def test_the_flow_cookie_does_not_go_to_the_whole_site(clean, microsoft):
     microsoft()
-    response = clean.get("/auth/login", follow_redirects=False)
+    response = clean.get("/auth/start", follow_redirects=False)
     header = response.headers["set-cookie"]
     assert "HttpOnly" in header
     assert "Path=/auth" in header
@@ -363,3 +371,57 @@ def test_the_dev_link_signs_the_holder_in(dev_signin):
     claims = auth.read(response.cookies[auth.COOKIE_NAME])
     assert claims and claims["oid"] == OID
     assert dev_signin.get("/api/me").json()["email"] == "dev@example.com"
+
+
+# ── the sign-in page ───────────────────────────────────────────────────────
+
+def test_the_sign_in_page_does_not_bounce_off_site_by_itself(clean, microsoft):
+    """An automatic redirect gives nobody a chance to see whose portal this
+    is, and "I followed a link and ended up on a Microsoft password box" is
+    the shape of the thing this course spends twenty minutes warning about."""
+    microsoft()
+    page = clean.get("/auth/login", follow_redirects=False)
+    assert page.status_code == 200
+    assert "login.microsoftonline.com" not in page.text
+    assert 'href="/auth/start' in page.text
+
+
+def test_the_sign_in_page_carries_the_brand(clean, microsoft):
+    microsoft()
+    page = clean.get("/auth/login", follow_redirects=False).text
+    assert "/media/brand/logo-lockup-alpha.png" in page
+    assert "Be Aware. Be Secure" in page
+    assert "Sign in with Microsoft" in page
+
+
+def test_the_brand_panel_comes_after_the_form_in_the_document(clean, microsoft):
+    """Left and right are CSS. Document order is what a keyboard and a screen
+    reader follow, so what somebody came to do must come first."""
+    microsoft()
+    page = clean.get("/auth/login", follow_redirects=False).text
+    assert page.index('class="auth-form"') < page.index('class="auth-brand"')
+
+
+def test_where_you_were_going_survives_the_sign_in_page(clean, microsoft):
+    microsoft()
+    page = clean.get("/auth/login?next=/module/x%3Fslide%3D11",
+                     follow_redirects=False).text
+    assert "/auth/start?next=" in page
+
+
+def test_an_off_site_next_never_reaches_the_page(clean, microsoft):
+    microsoft()
+    page = clean.get("/auth/login?next=https://evil.example.com",
+                     follow_redirects=False).text
+    assert "evil.example.com" not in page
+
+
+def test_an_error_from_microsoft_cannot_inject_script(clean, microsoft):
+    """`error` comes back from the callback, so it is remote input rendered
+    into a page. It used to be interpolated into markup by hand."""
+    microsoft(error="<script>alert(1)</script>")
+    clean.cookies.set(entra.FLOW_COOKIE, auth.sign({"state": "st"}))
+    page = clean.get("/auth/callback?code=abc&state=st", follow_redirects=False)
+    assert page.status_code == 403
+    assert "<script>alert(1)</script>" not in page.text
+    assert "&lt;script&gt;" in page.text

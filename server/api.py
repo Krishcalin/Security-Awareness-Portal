@@ -33,6 +33,8 @@ from fastapi.responses import (FileResponse, HTMLResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 from server import auth, certificate, content, db, entra, ingest, mailer
 from server.config import settings
 
@@ -56,6 +58,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Security Awareness Portal", lifespan=lifespan)
+
+#: Autoescaping, which is the whole reason this is a template engine and
+#: not a format string. The sign-in page renders an error that can carry a
+#: code returned by Microsoft, and a page that interpolates a remote value
+#: into markup by hand is one crafted callback away from running script.
+TEMPLATES = Environment(
+    loader=FileSystemLoader(Path(__file__).resolve().parent / "templates"),
+    autoescape=select_autoescape(["html"]))
 
 # The slide artwork, served from where it is authored. Copying 12MB of PNGs
 # into the frontend's public/ would give two copies and one of them would go
@@ -531,22 +541,39 @@ def _set_session(response: Response, entra_oid: str) -> None:
         secure=settings.cookie_secure, path="/")
 
 
-def _sign_in_problem(message: str, status: int = 400) -> HTMLResponse:
-    """A sentence a person can act on, rather than a JSON error body rendered
-    as text in the middle of a browser navigation."""
+def _sign_in_page(problem: str = "", status: int = 200,
+                  next_path: str = "/") -> HTMLResponse:
+    """The sign-in screen, with an optional sentence about what went wrong.
+
+    Rendered through the template rather than assembled here: `problem` can
+    carry an error code that came back from Microsoft, which is remote input,
+    and hand-interpolating that into markup is one crafted callback away from
+    running script in the browser. Autoescaping makes that a non-question.
+    """
+    query = ""
+    if next_path and next_path != "/":
+        query = "?next=" + quote(next_path, safe="")
     return HTMLResponse(status_code=status, content=(
-        "<!doctype html><html lang=\"en-GB\"><head><meta charset=\"utf-8\">"
-        "<title>Sign-in</title><style>body{font:16px/1.6 system-ui,sans-serif;"
-        "margin:16vh auto;max-width:34rem;padding:0 1.5rem}"
-        "a{color:inherit}</style></head><body>"
-        "<h1>Could not sign you in</h1><p>%s</p>"
-        "<p><a href=\"/auth/login\">Try again</a></p></body></html>" % message))
+        TEMPLATES.get_template("index.html").render(
+            problem=problem,
+            configured=entra.configured(),
+            next_query=query)))
 
 
 @app.get("/auth/login", include_in_schema=False)
-def sign_in(next: str = "/") -> Response:
+def sign_in_page(next: str = "/") -> Response:
+    """The page somebody lands on. It does not redirect to Microsoft on its
+    own: an automatic bounce off-site gives no chance to see whose portal this
+    is, and "I clicked a link and ended up on a Microsoft password box" is the
+    shape of the thing this course spends twenty minutes warning people about.
+    """
+    return _sign_in_page(next_path=entra.safe_next(next))
+
+
+@app.get("/auth/start", include_in_schema=False)
+def sign_in_start(next: str = "/") -> Response:
     if not entra.configured():
-        return _sign_in_problem(
+        return _sign_in_page(
             "Microsoft sign-in is not configured on this server. Set the "
             "ENTRA_* values in the environment; see .env.example.", 503)
     url, flow = entra.begin(next)
@@ -567,13 +594,13 @@ def sign_in_callback(request: Request) -> Response:
     flow = auth.verify(request.cookies.get(entra.FLOW_COOKIE, ""),
                        entra.FLOW_MAX_AGE_SECONDS)
     if not flow:
-        return _sign_in_problem(
+        return _sign_in_page(
             "This sign-in did not start here, or it took too long. Please "
-            "start again.")
+            "start again.", 400)
     try:
         identity = entra.complete(flow, dict(request.query_params))
     except entra.SignInRefused as refused:
-        return _sign_in_problem(str(refused), 403)
+        return _sign_in_page(str(refused), 403)
 
     learner = auth.upsert_learner(
         entra_oid=identity["oid"], email=identity["email"],
@@ -613,9 +640,9 @@ def dev_sign_in(token: str = "", next: str = "/") -> Response:
         raise HTTPException(status_code=404, detail="not found")
     claims = auth.read(token)
     if not claims:
-        return _sign_in_problem("That development sign-in link is not valid "
-                                "or has expired. Mint another with "
-                                "`python -m server.devsession --link`.")
+        return _sign_in_page("That development sign-in link is not valid or "
+                             "has expired. Mint another with "
+                             "`python -m server.devsession --link`.", 400)
     log.warning("development sign-in redeemed for %s", claims["oid"])
     response = RedirectResponse(entra.safe_next(next) if next != "/"
                                 else resume_path_for_oid(claims["oid"]),

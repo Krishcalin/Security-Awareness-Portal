@@ -91,7 +91,7 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 126, needs the database from docker compose
+python -m pytest                # 145, needs the database from docker compose
 cd frontend && npm test         # 31
 ```
 
@@ -102,10 +102,12 @@ cd frontend && npm test         # 31
 ```
 assets/slides/       the artwork, 21 PNGs
 assets/certificate/  the certificate artwork (PNG master + derived JPEG)
+assets/brand/        the logo (PNG master + derived lockup, mark, favicon)
 data/source/         the voice-over script, and the knowledge check
 data/modules/        built content (generated — do not hand-edit)
 tools/build_content  pairs artwork with script; refuses to emit a mismatch
 server/              FastAPI, Postgres, Entra sign-in
+server/templates/    the sign-in page, the one screen the SPA cannot render
 frontend/            React + Vite; the player and the check
 ```
 
@@ -191,6 +193,46 @@ An unfinished set of questions beats a slide: somebody who stopped halfway
 through the check is further on than the last slide they looked at, and
 dropping them back into the deck would strand the answers they had already
 given, which cannot be given again in the same attempt.
+
+
+---
+
+## The sign-in page and the brand
+
+`/auth/login` is a server-rendered page rather than a route in the app,
+because it is the one screen somebody sees while they have no session — the
+app cannot render it without one. It does **not** bounce to Microsoft on its
+own: an automatic redirect gives nobody a chance to see whose portal this is,
+and "I followed a link and ended up on a Microsoft password box" is the shape
+of the thing this course spends twenty minutes warning people about. The
+button goes to `/auth/start`, which is what talks to Entra.
+
+Form on the left, brand on the right — and **the brand panel is second in the
+document**. Left and right are CSS; document order is what a keyboard and a
+screen reader follow, so what somebody came to do comes first. Below 900px the
+brand moves *above* the form, because a bare sign-in button with no branding
+over it is exactly what a phishing page looks like.
+
+The supplied logo is the master and stays untouched.
+`tools/build_brand_assets.py` derives everything the site serves — the trimmed
+lockup, a transparent version, the shield on its own, and a favicon — so a
+redraw has one place to reach and no hand-cropped copy drifts from it.
+
+Two things the master cannot be used for as it stands, both handled there:
+
+- **It carries its own margin.** The lockup sits in about a third of a
+  2400x1792 page of white, and a layout cannot space something that brings its
+  own whitespace. The content is trimmed to its own bounds and the margin put
+  back in CSS.
+- **It is opaque white** — fine on a light panel, a visible white sticker on a
+  dark one. Transparency is recovered from the white ground, which works only
+  because the artwork was drawn on white.
+
+**The brand panel stays light in both themes.** The lockup is drawn for a light
+ground: on a dark one the navy "Be Aware." and the grey strapline all but
+disappear, so a dark panel would hide half the wordmark to honour a preference
+nobody expressed about a logo. The shield alone survives either ground, so
+that is what the app's own header uses.
 
 ---
 

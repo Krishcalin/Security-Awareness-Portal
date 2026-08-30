@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Security Awareness Training Portal</title>
+<link rel="icon" href="/media/brand/favicon.png" type="image/png">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+/*
+ * The sign-in screen.
+ *
+ * FORM LEFT, BRAND RIGHT — and the brand panel comes SECOND in the document.
+ * Left and right are CSS; document order is what a keyboard and a screen
+ * reader follow, and the thing somebody came here to do must come before the
+ * thing that tells them where they are. Below 900px the brand moves ABOVE the
+ * form, because a bare sign-in button with no branding over it is exactly what
+ * a phishing page looks like.
+ *
+ * THE BRAND PANEL IS LIGHT IN BOTH THEMES, on purpose. The lockup is drawn for
+ * a light ground: on a dark one the navy "Be Aware." and the grey strapline
+ * all but disappear, so a "dark mode" panel would hide half the wordmark to
+ * satisfy a preference nobody expressed about a logo.
+ */
+:root {
+  --canvas: #f6f7f9;
+  --surface: #ffffff;
+  --line: #dfe3ea;
+  --text: #171a1f;
+  --muted: #5c6470;
+  --accent: #12615e;
+  --accent-ink: #ffffff;
+  --navy: #10305f;
+  --shadow: 0 1px 2px rgb(16 22 30 / .06), 0 10px 30px rgb(16 22 30 / .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0d1014;
+    --surface: #151920;
+    --line: #262d38;
+    --text: #e8ebf0;
+    --muted: #98a1b0;
+    --accent: #4fb3ac;
+    --accent-ink: #06201f;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 10px 30px rgb(0 0 0 / .35);
+  }
+}
+:root[data-theme="dark"] {
+  --canvas: #0d1014; --surface: #151920; --line: #262d38;
+  --text: #e8ebf0; --muted: #98a1b0; --accent: #4fb3ac; --accent-ink: #06201f;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 10px 30px rgb(0 0 0 / .35);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font: 400 15px/1.6 "Public Sans", ui-sans-serif, system-ui, -apple-system,
+        "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.auth { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.05fr);
+        min-height: 100vh; }
+.auth-form { display: flex; align-items: center; justify-content: center;
+             padding: 40px 32px; background: var(--surface); }
+.auth-form > div { width: 100%; max-width: 380px; }
+
+.auth-brand {
+  /* Its own light ground in both themes — see the note at the top. A cool
+     tint drawn from the shield's navy, deep enough to read as a panel rather
+     than as the same page with a line down it. */
+  background: linear-gradient(160deg, #eef1f6 0%, #e4e9f1 100%);
+  border-left: 1px solid var(--line);
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 26px; padding: 40px;
+}
+.auth-brand img { width: 100%; max-width: 560px; height: auto; }
+.auth-brand p {
+  margin: 0; max-width: 42ch; text-align: center;
+  color: #46505f; font-size: 14px;
+}
+
+h1 { font-size: 25px; line-height: 1.25; letter-spacing: -.015em;
+     font-weight: 700; margin: 0 0 6px; }
+.lede { color: var(--muted); margin: 0 0 26px; }
+
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 12px 18px; border: 0; border-radius: 10px;
+  background: var(--accent); color: var(--accent-ink);
+  font: inherit; font-weight: 600; text-decoration: none; cursor: pointer;
+}
+.btn:hover { opacity: .92; }
+.btn svg { flex: none; }
+
+.note { margin: 22px 0 0; color: var(--muted); font-size: 13px; }
+.note strong { color: var(--text); font-weight: 600; }
+
+.banner {
+  margin: 0 0 20px; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface);
+  box-shadow: var(--shadow); font-size: 14px;
+}
+.banner-bad { border-color: #a03028; }
+
+.meta { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--line);
+        color: var(--muted); font-size: 12.5px; }
+
+a { color: var(--accent); }
+code {
+  font-size: .92em;
+  /* `python -m server.devsession --link` is one long unbreakable run. Without
+     this it pushes the panel wider than the phone it is being read on. */
+  overflow-wrap: anywhere;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px;
+                 border-radius: 6px; }
+
+@media (max-width: 900px) {
+  /* Brand row sized to its content, form row taking the rest, so the page
+     does not end halfway down with bare canvas beneath it. */
+  .auth { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  /* Branding above the form on a phone: see the note at the top. */
+  .auth-brand { order: -1; padding: 28px 22px; gap: 16px;
+                border-left: 0; border-bottom: 1px solid var(--line); }
+  .auth-brand img { max-width: 320px; }
+  .auth-brand p { font-size: 13px; }
+  .auth-form { padding: 28px 22px 56px; align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<main class="auth">
+
+  <div class="auth-form">
+    <div>
+      {% if problem %}
+      <div class="banner banner-bad" role="alert">{{ problem }}</div>
+      {% endif %}
+
+      <h1>Security Awareness Training</h1>
+      <p class="lede">
+        Twenty minutes, narrated, and a short knowledge check at the end.
+        You can stop whenever you like — it brings you back to the slide you
+        left.
+      </p>
+
+      {% if configured %}
+      <a class="btn" href="/auth/start{{ next_query }}">
+        <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true">
+          <path fill="#f25022" d="M1 1h10v10H1z"/>
+          <path fill="#7fba00" d="M12 1h10v10H12z"/>
+          <path fill="#00a4ef" d="M1 12h10v10H1z"/>
+          <path fill="#ffb900" d="M12 12h10v10H12z"/>
+        </svg>
+        Sign in with Microsoft
+      </a>
+      <p class="note">
+        You will be signed in with your work account. There is
+        <strong>no separate password</strong> for this portal, so there is
+        none to forget and none to be phished for.
+      </p>
+      {% else %}
+      <div class="banner" role="status">
+        <strong>Microsoft sign-in is not configured on this server.</strong>
+        Set the <code>ENTRA_*</code> values in the environment; see
+        <code>.env.example</code>. For local work, mint a session from the
+        shell with <code>python -m server.devsession --link</code>.
+      </div>
+      {% endif %}
+
+      <p class="meta">
+        Your name and work email address are read from the company directory,
+        so that a certificate can be issued in your name. Your answers are
+        recorded to show which material needs improving.
+      </p>
+    </div>
+  </div>
+
+  <!-- Second in the document on purpose. See the note in the stylesheet. -->
+  <div class="auth-brand">
+    <img src="/media/brand/logo-lockup-alpha.png"
+         width="1200" height="380"
+         alt="Be Aware. Be Secure — Security Awareness Training Portal">
+    <p>
+      Most attacks reach an organisation through a person, not a firewall.
+      This is the twenty minutes that makes that harder.
+    </p>
+  </div>
+
+</main>
+</body>
+</html>

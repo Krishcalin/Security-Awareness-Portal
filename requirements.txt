@@ -12,6 +12,7 @@ pillow>=10.0         # derives the certificate render source
 # audience, the expiry and the nonce; every one of those is somewhere a
 # hand-rolled version quietly accepts a token it should not.
 msal>=1.31
+jinja2>=3.1          # renders the sign-in page, with autoescaping
 
 # Tests
 pytest>=7.0

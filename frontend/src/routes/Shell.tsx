@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link, Outlet } from "react-router"
-import { Moon, ShieldCheck, Sun } from "lucide-react"
+import { Moon, Sun } from "lucide-react"
 
 import { api } from "../api/client"
 import type { Learner } from "../api/types"
@@ -35,8 +35,20 @@ export function Shell() {
     <div className="min-h-full flex flex-col">
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3">
-          <Link to="/" className="flex items-center gap-2 font-semibold">
-            <ShieldCheck size={20} className="text-accent" aria-hidden />
+          {/* The shield alone, not the full lockup. The lockup's navy
+              wordmark and grey strapline are drawn for a light ground and all
+              but vanish on the dark theme; the shield holds up on both. Its
+              intrinsic size is given so the header does not reflow around it
+              when it loads. */}
+          <Link to="/" className="flex items-center gap-2.5 font-semibold">
+            <img
+              src="/media/brand/logo-mark-128.png"
+              width={128}
+              height={144}
+              alt=""
+              aria-hidden
+              className="h-7 w-auto"
+            />
             <span>Security Awareness</span>
           </Link>
           <div className="ml-auto flex items-center gap-4 text-sm">
