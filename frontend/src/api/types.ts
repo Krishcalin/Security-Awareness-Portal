@@ -40,6 +40,9 @@ export interface Lesson {
   image: string
   narration: string
   audio_url: string
+  /** Where each word falls in the recording. Empty when there is no
+   *  recording, or when the script has moved on since it was made. */
+  audio_timings_url: string
   narration_seconds: number
 }
 

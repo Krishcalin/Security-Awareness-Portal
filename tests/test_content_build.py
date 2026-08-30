@@ -240,8 +240,13 @@ def test_the_pause_lengths_match_the_ones_the_player_uses():
 
 
 def test_a_slide_is_reported_as_longer_than_its_words_alone(module_json):
-    """Reporting only the word count tells a learner the course is two
-    minutes shorter than it is, every time they look at it."""
+    """What the BUILD says is how long the browser takes to read it — words
+    plus the silence between sentences. Reporting the word count alone told a
+    learner the course was two minutes shorter than it was, every time.
+
+    A slide with a recording reports the recording's real length instead, but
+    that is resolved when the content is loaded, because which recordings
+    exist is a property of the deployment. See tests/test_ingest.py."""
     for lesson in module_json["lessons"]:
         if not lesson["narration"]:
             continue
@@ -250,6 +255,15 @@ def test_a_slide_is_reported_as_longer_than_its_words_alone(module_json):
         assert lesson["narration_seconds"] > spoken
         assert lesson["narration_seconds"] == round(
             spoken + bc.pause_seconds(lesson["narration"]))
+
+
+def test_the_built_content_never_names_a_recording(module_json):
+    """It is loaded by servers that have the audio and by servers that do not,
+    so a file that mentioned either would be a different file depending on
+    which machine ran the build — and the staleness check would fail on a
+    clean checkout."""
+    assert "audio_url" not in json.dumps(module_json)
+    assert "narration/" not in json.dumps(module_json)
 
 
 def test_the_silence_is_not_waited_out_after_the_last_sentence():

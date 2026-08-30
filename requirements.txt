@@ -14,6 +14,11 @@ pillow>=10.0         # derives the certificate render source
 msal>=1.31
 jinja2>=3.1          # renders the sign-in page, with autoescaping
 
+# Recording the narration with Azure Neural TTS. Optional: the `sapi`
+# backend needs nothing, and the portal falls back to the browser's own
+# synthesiser for any slide with no recording.
+#   pip install azure-cognitiveservices-speech
+
 # Tests
 pytest>=7.0
 httpx>=0.27          # required by fastapi.testclient

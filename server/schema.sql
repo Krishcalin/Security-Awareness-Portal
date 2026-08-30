@@ -263,3 +263,11 @@ CREATE TABLE IF NOT EXISTS certificate (
 CREATE INDEX IF NOT EXISTS certificate_learner_idx ON certificate (learner_id);
 CREATE INDEX IF NOT EXISTS certificate_unsent_idx ON certificate (issued_at)
     WHERE emailed_at IS NULL;
+
+-- Where each word falls in the recording, as a path to a small JSON track.
+-- Without it a recorded slide loses the transcript highlight that the browser
+-- synthesiser gave for free through its word-boundary events — and that
+-- highlight is what makes the course usable by somebody who is reading rather
+-- than listening.
+ALTER TABLE lesson ADD COLUMN IF NOT EXISTS
+    audio_timings_url text NOT NULL DEFAULT '';

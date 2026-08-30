@@ -241,6 +241,8 @@ def build() -> dict:
             "silent — an unnarrated slide should be a decision, not an "
             "omission nobody noticed." % unexplained)
 
+    module_slug = "security-awareness-essentials"
+
     lessons, mismatched = [], []
     for number in sorted(slides):
         slug, filename = slides[number]
@@ -258,9 +260,11 @@ def build() -> dict:
             "title": title or slug.replace("-", " ").title(),
             "image": "slides/" + filename,
             "narration": narration,
-            # Speech plus the silence between sentences. Reporting only the
-            # words would tell a learner the course is two minutes shorter
-            # than it is, every time.
+            # How long the browser takes to read it: the words plus the
+            # silence between sentences. A slide with a RECORDING reports the
+            # recording's real length instead, but which recordings exist is a
+            # property of the deployment rather than of the course, so that is
+            # resolved when the content is loaded — see server/ingest.py.
             "narration_seconds": round(spoken + pause_seconds(narration))
                                  if words else 0,
             "silent_because": INTENTIONALLY_SILENT.get(number, ""),
@@ -277,7 +281,7 @@ def build() -> dict:
     questions = load_questions({l["ordinal"] for l in lessons})
     total = sum(l["narration_seconds"] for l in lessons)
     return {
-        "slug": "security-awareness-essentials",
+        "slug": module_slug,
         "title": "Security Awareness Essentials",
         "summary": ("How attackers actually reach people, what those attempts "
                     "look like, and the habits that stop them. No jargon, no "

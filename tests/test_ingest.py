@@ -120,3 +120,120 @@ def test_a_hand_edited_module_file_is_refused(tmp_path, monkeypatch):
     with pytest.raises(ValueError) as problem:
         content.load_modules()
     assert "build_content" in str(problem.value)
+
+
+# ── recorded narration ─────────────────────────────────────────────────────
+#
+# Which recordings a deployment holds is not part of the course, so it is
+# resolved here rather than baked into the built content.
+
+def test_a_recording_is_attached_only_while_it_is_of_the_current_script(
+        tmp_path, monkeypatch):
+    """THE guard. An edited script with an unregenerated recording means a
+    learner hears one wording while reading another on screen — worse than a
+    robotic voice, and invisible to whoever made the edit. So the recording is
+    dropped and the slide falls back to the synthesiser: a worse voice rather
+    than a wrong one."""
+    import json
+    from server import db, ingest
+    from tools import build_narration
+
+    payload = _authored()
+    slide = payload["lessons"][0]
+    slug = payload["slug"]
+
+    folder = tmp_path / slug
+    folder.mkdir(parents=True)
+    (folder / "01.mp3").write_bytes(b"not really audio")
+    (folder / "01.timings.json").write_text("[]", encoding="utf-8")
+
+    def manifest_for(text):
+        (folder / "manifest.json").write_text(json.dumps({"slides": {
+            str(slide["ordinal"]): {
+                "file": "01.mp3", "timings": "01.timings.json",
+                "script_sha": build_narration.script_hash(text),
+                "seconds": 12.0, "words": 4,
+            }}}), encoding="utf-8")
+
+    monkeypatch.setattr(ingest, "NARRATION", tmp_path)
+
+    manifest_for(slide["narration"])            # recorded from these words
+    ingest.sync([payload])
+    row = db.one("SELECT audio_url, narration_seconds FROM lesson "
+                 "WHERE ordinal = %s", (slide["ordinal"],))
+    assert row["audio_url"].endswith("01.mp3")
+    assert row["narration_seconds"] == 12       # the recording's own length
+
+    manifest_for("something else entirely")     # the script has moved on
+    ingest.sync([payload])
+    row = db.one("SELECT audio_url, narration_seconds FROM lesson "
+                 "WHERE ordinal = %s", (slide["ordinal"],))
+    assert row["audio_url"] == "", "a stale recording was left attached"
+    assert row["narration_seconds"] == slide["narration_seconds"]
+
+
+def test_a_recording_whose_file_has_gone_is_not_offered(tmp_path, monkeypatch):
+    """An audio_url pointing at nothing is recoverable in the player, but not
+    something to rely on the player to survive."""
+    import json
+    from server import ingest
+    payload = _authored()
+    folder = tmp_path / payload["slug"]
+    folder.mkdir(parents=True)
+    (folder / "manifest.json").write_text(json.dumps({"slides": {"1": {
+        "file": "01.mp3", "timings": "", "script_sha": "whatever",
+        "seconds": 12.0, "words": 4,
+    }}}), encoding="utf-8")
+    monkeypatch.setattr(ingest, "NARRATION", tmp_path)
+    assert ingest.recordings(payload["slug"]) == {}
+
+
+def test_a_deployment_with_no_recordings_falls_back_rather_than_failing(
+        tmp_path, monkeypatch):
+    """A clean checkout has the course and none of the audio."""
+    from server import db, ingest
+    payload = _authored()
+    monkeypatch.setattr(ingest, "NARRATION", tmp_path / "nothing-here")
+    summary = ingest.sync([payload])
+    assert summary[0]["recorded"] == 0
+    assert db.one("SELECT count(*) c FROM lesson WHERE audio_url <> ''")["c"] == 0
+    # And every slide still has words for the browser to read.
+    assert db.one("SELECT count(*) c FROM lesson WHERE narration <> ''")["c"] > 0
+
+
+def test_a_word_track_is_never_attached_without_its_recording(restore_content, tmp_path,
+                                                              monkeypatch):
+    from server import db, ingest
+    payload = _authored()
+    monkeypatch.setattr(ingest, "NARRATION", tmp_path / "nothing-here")
+    ingest.sync([payload])
+    assert db.one("SELECT count(*) c FROM lesson "
+                  "WHERE audio_timings_url <> '' AND audio_url = ''")["c"] == 0
+
+
+def test_the_two_definitions_of_the_same_words_agree():
+    """`build_narration` writes a recording's provenance and `ingest` checks
+    it. Two different hashes would silently disagree for ever."""
+    from server import ingest
+    from tools import build_narration
+    for text in ("One thing.", "Line one.\nLine two.", "  padded  "):
+        assert ingest.script_hash(text) == build_narration.script_hash(text)
+
+
+def test_rewrapping_a_paragraph_does_not_throw_away_a_good_recording():
+    from tools import build_narration
+    assert build_narration.script_hash("One thing.  Then\nanother.") == \
+        build_narration.script_hash("One thing. Then another.")
+
+
+def test_the_module_length_is_what_it_actually_takes(restore_content, tmp_path, monkeypatch):
+    """A recording is rarely the length the word count predicted, and the
+    figure shown before somebody presses play should describe what they are
+    about to hear."""
+    from server import db, ingest
+    payload = _authored()
+    monkeypatch.setattr(ingest, "NARRATION", tmp_path / "nothing-here")
+    ingest.sync([payload])
+    seconds = db.one("SELECT COALESCE(sum(narration_seconds), 0) s "
+                     "FROM lesson")["s"]
+    assert db.one("SELECT minutes FROM module")["minutes"] == round(seconds / 60)

@@ -91,7 +91,7 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 153, needs the database from docker compose
+python -m pytest                # 161, needs the database from docker compose
 cd frontend && npm test         # 74
 ```
 
@@ -103,6 +103,7 @@ cd frontend && npm test         # 74
 assets/slides/       the artwork, 21 PNGs
 assets/certificate/  the certificate artwork (PNG master + derived JPEG)
 assets/brand/        the logo (PNG master + derived lockup, mark, favicon)
+assets/narration/    recorded narration, and where each word falls in it
 data/source/         the voice-over script, and the knowledge check
 data/modules/        built content (generated — do not hand-edit)
 tools/build_content  pairs artwork with script; refuses to emit a mismatch
@@ -116,14 +117,61 @@ runs on start and is idempotent.
 
 ### The narration
 
-Spoken by the browser, not shipped as audio files: nothing to host, nothing to
-keep in step with a script that gets edited, and the words stay reviewable in a
-diff. `lesson.audio_url` is the escape hatch — when it is set the player
-prefers it, so swapping in a recorded voice is a content change rather than a
-code change.
+**Recorded once and served**, rather than read aloud by whatever voice the
+learner's machine happens to have. Browser speech synthesis was the original
+choice and it was the wrong one: it sounds like whatever is installed — on a
+stock Windows box, two legacy American voices reading British spelling — it
+clips the opening of every utterance on Chrome for Windows, and it means no
+two employees hear the same course, which is a strange property for something
+that issues a certificate.
 
-Browser speech synthesis has four failure modes that look like nothing at all,
-and all four are handled in [`frontend/src/narration.ts`](frontend/src/narration.ts):
+```bash
+python -m tools.build_narration                  # record what has gone stale
+python -m tools.build_narration --backend azure  # the voice people will hear
+python -m tools.build_narration --check          # exit 1 if any is stale
+```
+
+Which recordings a deployment holds is **not part of the course**: the same
+content JSON is loaded by a server that has the audio and by one that does
+not. So recordings are resolved when content is loaded rather than baked into
+the built file, which would otherwise differ depending on which machine ran
+the build.
+
+**The risk this has to close is staleness.** Audio files go out of date: the
+script is edited, the recording is not, and a learner hears one wording while
+reading another on screen. That is worse than a robotic voice — it is wrong,
+and it is invisible to whoever made the edit. So every recording stores the
+SHA-256 of the exact words it was made from, and the content build attaches a
+recording to a slide **only while that hash still matches**. Drift cannot
+produce wrong audio; it can only fall back to the synthesiser, which is a bad
+voice rather than a lie. Whitespace is normalised first, so re-wrapping a
+paragraph does not throw away a perfectly good take.
+
+There are two backends. `azure` is the point — neural en-GB, word-level
+timings, about 30 cents to record the whole course. `sapi` is Windows' own
+synthesiser: no account, no key, and it exists to prove the pipeline end to
+end before anybody pays for anything. Its output is WAV and is never committed.
+
+**A word track is checked before it is believed.** The recording carries a
+small JSON file saying where each word falls, and the transcript follows the
+audio from it. Measured on the Windows synthesiser, its own report is wrong in
+two independent ways over a minute of speech — the timeline runs about a third
+long, and the character offsets drift twenty-one characters by the end, so a
+mark that should point at "you" points into the middle of "that works". A
+track that is approximately right is worse than none, because the highlight
+creeps ahead of the voice until the learner distrusts the reading rather than
+the highlight. So tracks that fail the check are discarded and the slide plays
+without a highlight.
+
+**Falling back, never falling silent.** A slide with no current recording is
+read by the browser. So is one whose file fails to load. The transcript is on
+screen throughout either way, which is also what makes the course usable
+without hearing it at all — and on a machine with no voices installed *and* no
+recording, the player says so rather than being silently silent.
+
+Browser speech synthesis, still the fallback, has four failure modes that look
+like nothing at all, and all four are handled in
+[`frontend/src/narration.ts`](frontend/src/narration.ts):
 voices that load asynchronously, Chrome stopping after fifteen seconds,
 `cancel()` firing `end` in some browsers and not others, and speech needing a
 user gesture.

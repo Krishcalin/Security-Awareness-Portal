@@ -198,7 +198,8 @@ def module_detail(slug: str,
         (learner["id"], module["id"]))
     lessons = db.query(
         "SELECT ordinal, title, body, animation, image, narration, audio_url, "
-        "narration_seconds FROM lesson WHERE module_id = %s ORDER BY ordinal",
+        "audio_timings_url, narration_seconds "
+        "FROM lesson WHERE module_id = %s ORDER BY ordinal",
         (module["id"],))
     enrolment = db.one(
         "SELECT started_at, completed_at, furthest_ordinal FROM enrolment "

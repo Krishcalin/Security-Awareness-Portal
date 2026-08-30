@@ -31,3 +31,15 @@ Thumbs.db
 
 # Local scratch
 *.local
+
+# Recorded narration.
+#
+# Nothing here is committed yet, so every deployment currently falls back to
+# the browser's synthesiser. The `sapi` backend writes 52MB of WAV purely to
+# prove the pipeline locally, and that should never be committed.
+#
+# WHEN REAL RECORDINGS ARE MADE (tools/build_narration.py --backend azure),
+# the mp3 files, their word tracks and manifest.json ARE the deployment
+# artefact and belong in the repository — about 10MB, which is the point at
+# which Git LFS stops being optional. Relax this rule then.
+assets/narration/

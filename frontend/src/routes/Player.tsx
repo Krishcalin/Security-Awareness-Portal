@@ -8,6 +8,26 @@ import { api } from "../api/client"
 import type { Lesson, ModuleDetail } from "../api/types"
 import { Narrator, type NarratorStatus } from "../narration"
 
+/** One word, and when it is said. Produced by tools/build_narration.py. */
+interface Mark { ms: number; at: number; len: number }
+
+/** Assets are served from /media unless the content gives a full URL, which
+ *  is how a recording could later be moved to a CDN without a code change. */
+function mediaUrl(path: string): string {
+  return /^https?:\/\//.test(path) ? path : "/media/" + path
+}
+
+/** The last word started at or before `ms`. */
+function spokenIndex(marks: Mark[], ms: number): number {
+  let low = 0, high = marks.length - 1, found = -1
+  while (low <= high) {
+    const middle = (low + high) >> 1
+    if (marks[middle].ms <= ms) { found = middle; low = middle + 1 }
+    else high = middle - 1
+  }
+  return found
+}
+
 /** Words with their offsets, for following the narration as it is spoken. */
 function words(text: string): { text: string; start: number }[] {
   const found: { text: string; start: number }[] = []
@@ -59,6 +79,8 @@ export function Player() {
 
   const narrator = useRef(new Narrator())
   const audio = useRef<HTMLAudioElement | null>(null)
+  const marks = useRef<Mark[]>([])
+  const following = useRef<number | null>(null)
   // Read inside callbacks that outlive the render they were made in.
   const autoAdvanceNow = useRef(autoAdvance)
   autoAdvanceNow.current = autoAdvance
@@ -88,6 +110,39 @@ export function Player() {
     }).catch((error) => setProblem(String(error.message)))
   }, [slug, search])
 
+  // The word track for the slide on screen. Small, and only for the slide
+  // being looked at — the whole course would be a megabyte of timings.
+  useEffect(() => {
+    marks.current = []
+    if (!lesson?.audio_timings_url) return
+    let stale = false
+    fetch(mediaUrl(lesson.audio_timings_url))
+      .then((response) => response.ok ? response.json() : [])
+      .then((loaded: Mark[]) => { if (!stale) marks.current = loaded })
+      .catch(() => {
+        // No track: the recording still plays, the transcript simply does
+        // not follow it. Losing the highlight is not worth an error.
+      })
+    return () => { stale = true }
+  }, [lesson])
+
+  const followRecording = useCallback(() => {
+    const element = audio.current
+    if (!element || element.paused || element.ended) return
+    const at = spokenIndex(marks.current, element.currentTime * 1000)
+    setSpokenAt(at >= 0 ? marks.current[at].at : -1)
+    following.current = requestAnimationFrame(followRecording)
+  }, [])
+
+  const stopFollowing = useCallback(() => {
+    if (following.current !== null) {
+      cancelAnimationFrame(following.current)
+      following.current = null
+    }
+  }, [])
+
+  useEffect(() => stopFollowing, [stopFollowing])
+
   useEffect(() => {
     if (lesson) void api.recordProgress(slug, lesson.ordinal).catch(() => {
       // Progress is a convenience, not the record of record. Losing one
@@ -97,20 +152,34 @@ export function Player() {
 
   const goTo = useCallback((next: number) => {
     narrator.current.stop()
-    audio.current?.pause()
+    stopFollowing()
+    if (audio.current) {
+      audio.current.pause()
+      audio.current.currentTime = 0
+    }
+    setStatus("idle")
     setSpokenAt(-1)
     setIndex(next)
-  }, [])
+  }, [stopFollowing])
 
   const speakLesson = useCallback((at: number) => {
     const target = detail?.lessons[at]
     if (!target) return
     setSpokenAt(-1)
     if (target.audio_url) {
-      // Recorded narration wins when it exists — swapping in a real voice is
-      // meant to be a content change, not a code change.
-      audio.current?.play().catch(() => setStatus("idle"))
-      setStatus("speaking")
+      // A recording wins whenever there is one. It sounds the same for every
+      // learner, it does not depend on which voices a laptop happens to have
+      // installed, and it does not clip the first word of a sentence the way
+      // the browser synthesiser does on Chrome for Windows.
+      //
+      // There is no recording when the script has been edited since the last
+      // one was made, and then this falls through to the synthesiser below —
+      // a worse voice, rather than a voice saying something the transcript
+      // does not.
+      audio.current?.play().then(() => {
+        setStatus("speaking")
+        followRecording()
+      }).catch(() => setStatus("idle"))
       return
     }
     narrator.current.speak(target.narration, {
@@ -123,7 +192,7 @@ export function Player() {
         else setReachedEnd(true)
       },
     })
-  }, [detail, goTo, lastIndex])
+  }, [detail, goTo, lastIndex, followRecording])
 
   const playing = status === "speaking"
 
@@ -132,13 +201,20 @@ export function Player() {
     if (playing) {
       narrator.current.pause()
       audio.current?.pause()
+      stopFollowing()
+      setStatus("paused")
     } else if (status === "paused") {
-      narrator.current.resume()
-      void audio.current?.play()
+      if (lesson?.audio_url) {
+        void audio.current?.play().then(followRecording)
+        setStatus("speaking")
+      } else {
+        narrator.current.resume()
+      }
     } else {
       speakLesson(index)
     }
-  }, [index, playing, speakLesson, status])
+  }, [followRecording, index, lesson, playing, speakLesson, status,
+      stopFollowing])
 
   // Advancing while speaking should carry the voice to the new slide rather
   // than leaving the previous one talking over it.
@@ -196,13 +272,35 @@ export function Player() {
       {lesson.audio_url && (
         <audio
           ref={audio}
-          src={lesson.audio_url}
+          // Keyed by the slide, or the browser keeps the previous recording
+          // loaded and plays it against the new artwork.
+          key={lesson.ordinal}
+          src={mediaUrl(lesson.audio_url)}
           muted={muted}
+          preload="auto"
           onEnded={() => {
+            stopFollowing()
             setStatus("idle")
+            setSpokenAt(-1)
             if (!autoAdvanceNow.current) return
             if (index < lastIndex) goTo(index + 1)
             else setReachedEnd(true)
+          }}
+          onError={() => {
+            // The file is missing or will not decode. Say the slide with the
+            // synthesiser rather than sitting in silence.
+            stopFollowing()
+            setStatus("idle")
+            narrator.current.speak(lesson.narration, {
+              onStatus: setStatus,
+              onWord: setSpokenAt,
+              onEnd: () => {
+                if (!autoAdvanceNow.current) return
+                const next = indexNow.current + 1
+                if (next <= lastIndex) goTo(next)
+                else setReachedEnd(true)
+              },
+            })
           }}
         />
       )}
@@ -261,7 +359,7 @@ export function Player() {
 
       <section className="mt-6 rounded-xl border border-line bg-surface p-5">
         <h2 className="text-xl font-semibold tracking-tight">{lesson.title}</h2>
-        {status === "unsupported" && (
+        {status === "unsupported" && !lesson.audio_url && (
           // Said out loud rather than left as silence. A learner on a machine
           // with no voices should know the narration is missing, not conclude
           // that this slide has none.
@@ -275,8 +373,10 @@ export function Player() {
             <Transcript narration={lesson.narration} spokenAt={spokenAt} />
             <p className="mt-3 text-sm text-muted tabular-nums">
               About {Math.round(lesson.narration_seconds / 5) * 5} seconds
-              {narrator.current.voiceName && status !== "unsupported"
-                ? ` · ${narrator.current.voiceName}` : ""}
+              {lesson.audio_url
+                ? " · recorded narration"
+                : narrator.current.voiceName && status !== "unsupported"
+                  ? ` · read by ${narrator.current.voiceName}` : ""}
             </p>
           </div>
         ) : (

@@ -13,13 +13,50 @@ exists to keep.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from server import content, db
 
 log = logging.getLogger(__name__)
+
+#: Recorded narration, if this deployment has any.
+NARRATION = Path(__file__).resolve().parents[1] / "assets" / "narration"
+
+
+def script_hash(text: str) -> str:
+    """Mirrors `script_hash` in tools/build_narration.py, which is where a
+    recording's provenance is written down. A test asserts they agree."""
+    return hashlib.sha256(" ".join(text.split()).encode("utf-8")).hexdigest()
+
+
+def recordings(slug: str) -> Dict[int, Dict[str, Any]]:
+    """The recordings this deployment holds for a module.
+
+    Resolved HERE rather than baked into the built content, because which
+    recordings exist is a property of the deployment: the same course JSON is
+    loaded by a server that has the audio and by one that does not, and the
+    second must fall back rather than serve a URL to nothing.
+
+    An entry is dropped if its file is missing. It is dropped in
+    `_sync_lessons` if the script has moved on since it was recorded, which is
+    the guard that stops a learner hearing one wording while reading another.
+    """
+    manifest = NARRATION / slug / "manifest.json"
+    if not manifest.exists():
+        return {}
+    slides = json.loads(manifest.read_text(encoding="utf-8")).get("slides", {})
+    return {
+        int(ordinal): entry for ordinal, entry in slides.items()
+        if (NARRATION / slug / entry["file"]).exists()
+        # A recording may legitimately carry no word track — see
+        # `usable_marks` in tools/build_narration.py. It still plays.
+        and (not entry["timings"]
+             or (NARRATION / slug / entry["timings"]).exists())
+    }
 
 
 def sync(modules: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
@@ -57,36 +94,74 @@ def _sync_module(conn, payload: Dict[str, Any], order: int) -> Dict[str, Any]:
     ).fetchone()
     module_id = row["id"]
 
-    lessons = _sync_lessons(conn, module_id, payload["lessons"])
+    lessons, recorded = _sync_lessons(conn, module_id, payload["lessons"],
+                                      payload["slug"])
     questions, retired = _sync_questions(conn, module_id, payload["questions"])
+
+    # The course is as long as it actually takes here. A recording is usually
+    # not the same length as the estimate the build made from the word count,
+    # and the figure a learner is shown before pressing play should be the one
+    # that applies to what they are about to hear.
+    conn.execute(
+        """
+        UPDATE module SET minutes = GREATEST(1, ROUND((
+            SELECT COALESCE(sum(narration_seconds), 0)
+            FROM lesson WHERE module_id = %s) / 60.0))
+        WHERE id = %s
+        """, (module_id, module_id))
+
     return {
         "slug": payload["slug"],
         "content_hash": payload["content_hash"],
         "lessons": lessons,
         "questions": questions,
         "retired": retired,
+        "recorded": recorded,
     }
 
 
-def _sync_lessons(conn, module_id: int, lessons: List[Dict[str, Any]]) -> int:
+def _sync_lessons(conn, module_id: int, lessons: List[Dict[str, Any]],
+                  slug: str) -> tuple[int, int]:
+    available = recordings(slug)
+    recorded = 0
     for lesson in lessons:
+        # A recording counts only while it is a recording of THESE words.
+        # Otherwise it is dropped and the slide is read by the browser: a
+        # worse voice, rather than a voice saying something the transcript on
+        # screen does not.
+        take = available.get(lesson["ordinal"])
+        if take and take["script_sha"] != script_hash(lesson.get("narration", "")):
+            take = None
+        if take:
+            recorded += 1
+        audio = "narration/%s/%s" % (slug, take["file"]) if take else ""
+        timings = ("narration/%s/%s" % (slug, take["timings"])
+                   if take and take["timings"] else "")
+        seconds = (round(take["seconds"]) if take
+                   else lesson.get("narration_seconds", 0))
         conn.execute(
             """
             INSERT INTO lesson (module_id, ordinal, title, body, animation,
-                                image, narration, audio_url, narration_seconds)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                image, narration, audio_url,
+                                audio_timings_url, narration_seconds)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (module_id, ordinal) DO UPDATE SET
                 title             = EXCLUDED.title,
                 body              = EXCLUDED.body,
                 animation         = EXCLUDED.animation,
                 image             = EXCLUDED.image,
                 narration         = EXCLUDED.narration,
+                -- Cleared as well as set: a slide whose script moved on has
+                -- no current recording, and must fall back rather than keep
+                -- playing the one from before the edit.
+                audio_url         = EXCLUDED.audio_url,
+                audio_timings_url = EXCLUDED.audio_timings_url,
                 narration_seconds = EXCLUDED.narration_seconds
             """,
             (module_id, lesson["ordinal"], lesson["title"],
              lesson.get("body", ""), lesson.get("animation", "none"),
              lesson.get("image", ""), lesson.get("narration", ""),
-             lesson.get("audio_url", ""), lesson.get("narration_seconds", 0)),
+             audio, timings, seconds),
         )
     # A lesson nothing references can go; only `question` is referenced by the
     # evidence tables.
@@ -94,7 +169,7 @@ def _sync_lessons(conn, module_id: int, lessons: List[Dict[str, Any]]) -> int:
     conn.execute(
         "DELETE FROM lesson WHERE module_id = %s AND ordinal <> ALL(%s)",
         (module_id, ordinals))
-    return len(lessons)
+    return len(lessons), recorded
 
 
 def _sync_questions(conn, module_id: int,
