@@ -19,9 +19,14 @@ const DATA = {
   module: { slug: "essentials", title: "Security Awareness Essentials",
             content_hash: "abc" },
   summary: {
+    cycle: null as null | { id: number; name: string; opens_at: string
+                            due_at: string | null },
+    overdue: false,
     people: 29, never_opened: 4, opened: 25, stopped_partway: 4,
     reached_end: 21, passed: 21, passed_first_time: 13,
   },
+  cycles: [] as { id: number; name: string; opens_at: string
+                  due_at: string | null; passed: number; open: boolean }[],
   questions: [
     { question_id: 1, ordinal: 1, prompt: "Everybody gets this one",
       teaches: 3, teaches_title: "Phishing Emails", answered: 40, correct: 40,
@@ -123,5 +128,59 @@ describe("certificates", () => {
   it("surfaces the ones that never actually went anywhere", async () => {
     renderReport()
     expect(await screen.findByText(/21 that failed to send/)).toBeInTheDocument()
+  })
+})
+
+describe("the training cycle", () => {
+  it("is not mentioned on a portal that has none", async () => {
+    report.mockResolvedValue(DATA)
+    renderReport()
+    await screen.findByText("Security Awareness Essentials")
+    expect(screen.queryByText(/cycles on record/)).not.toBeInTheDocument()
+  })
+
+  it("names the period the figures are about", async () => {
+    // "21 passed" is a number somebody will read as being about now. It is
+    // about whichever period the report is scoped to, and the screen has to
+    // say which.
+    report.mockResolvedValue({
+      ...DATA,
+      summary: {
+        ...DATA.summary,
+        cycle: { id: 2, name: "2027 annual refresher",
+                 opens_at: "2027-01-01T00:00:00Z",
+                 due_at: "2027-03-31T23:59:59Z" },
+        overdue: false,
+      },
+      cycles: [
+        { id: 2, name: "2027 annual refresher", opens_at: "2027-01-01T00:00:00Z",
+          due_at: "2027-03-31T23:59:59Z", passed: 21, open: true },
+        { id: 1, name: "2026 annual refresher", opens_at: "2026-01-01T00:00:00Z",
+          due_at: null, passed: 27, open: true },
+      ],
+    })
+    renderReport()
+    await screen.findByText("2027 annual refresher")
+    // The line is assembled from several expressions, so it is several text
+    // nodes; a matcher looking for one element never finds it.
+    const said = () => document.body.textContent ?? ""
+    expect(said()).toContain("2 cycles on record")
+    expect(said()).toMatch(/· due 31 March 2027/)
+  })
+
+  it("says when the deadline has gone by", async () => {
+    report.mockResolvedValue({
+      ...DATA,
+      summary: {
+        ...DATA.summary,
+        cycle: { id: 1, name: "2026 refresher", opens_at: "2026-01-01T00:00:00Z",
+                 due_at: "2026-03-31T23:59:59Z" },
+        overdue: true,
+      },
+      cycles: [],
+    })
+    renderReport()
+    await screen.findByText("2026 refresher")
+    expect(document.body.textContent ?? "").toMatch(/was due 31 March 2026/)
   })
 })

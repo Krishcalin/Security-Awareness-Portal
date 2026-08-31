@@ -29,9 +29,10 @@ separately and by slide.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from server import db
+from server import cycles, db
 
 #: Below this many answers, a correct rate is not reported. Small samples are
 #: where confident-looking nonsense comes from, and a report that says "100%"
@@ -53,7 +54,16 @@ GUESS_MS = 2000
 
 
 def summary(module_id: int) -> Dict[str, Any]:
-    """The headline, deliberately as several numbers rather than one."""
+    """The headline, deliberately as several numbers rather than one.
+
+    All of it for the cycle in force. "94% trained" is bad enough without it
+    also meaning "at some point in the last four years" — the question an
+    auditor asks is about a period, and a figure that quietly spans every
+    period there has ever been answers a question nobody asked.
+    """
+    cycle = cycles.current(module_id)
+    cycle_id = cycle["id"] if cycle else None
+
     row = db.one(
         """
         SELECT
@@ -63,8 +73,9 @@ def summary(module_id: int) -> Dict[str, Any]:
           count(e.id) FILTER (WHERE e.completed_at IS NOT NULL) AS reached_end,
           count(e.id) FILTER (WHERE e.completed_at IS NULL
                                 AND e.furthest_ordinal > 0)     AS stopped_partway
-        FROM enrolment e WHERE e.module_id = %s
-        """, (module_id,))
+        FROM enrolment e
+        WHERE e.module_id = %s AND e.cycle_id IS NOT DISTINCT FROM %s
+        """, (module_id, cycle_id))
 
     passing = db.one(
         """
@@ -74,13 +85,18 @@ def summary(module_id: int) -> Dict[str, Any]:
             SELECT c.learner_id,
                    bool_or(a.attempt_no = 1) AS first_go
             FROM certificate c JOIN attempt a ON a.id = c.attempt_id
-            WHERE c.module_id = %s
+            WHERE c.module_id = %s AND c.cycle_id IS NOT DISTINCT FROM %s
             GROUP BY c.learner_id
         ) AS holders
-        """, (module_id,))
+        """, (module_id, cycle_id))
 
     people = row["people"] or 0
     return {
+        # Named, so nobody reads a figure off this screen without knowing
+        # which period it is about.
+        "cycle": cycle,
+        "overdue": bool(cycle and cycle["due_at"]
+                        and cycle["due_at"] < datetime.now(timezone.utc)),
         "people": people,
         "never_opened": people - row["opened"],
         "opened": row["opened"],
@@ -94,21 +110,30 @@ def summary(module_id: int) -> Dict[str, Any]:
 
 
 def people(module_id: int) -> List[Dict[str, Any]]:
-    """One row per person. Completion and result stay in separate columns."""
+    """One row per person, for the cycle in force.
+
+    Somebody who passed last year and has not started this year shows as not
+    started, which is the truth about this cycle and the only useful thing to
+    put in front of whoever has to chase them."""
     return db.query(
         """
         SELECT l.id, l.email, l.display_name, l.department,
                e.started_at, e.completed_at,
                COALESCE(e.furthest_ordinal, 0) AS furthest_ordinal,
+               -- This cycle's attempts. An attempt from last year is not
+               -- a retake of this year's check.
                (SELECT count(*) FROM attempt a
                  WHERE a.learner_id = l.id AND a.module_id = %(module)s
+                   AND a.cycle_id IS NOT DISTINCT FROM %(cycle)s
                    AND a.finished_at IS NOT NULL)          AS attempts,
                (SELECT a.score FROM attempt a
                  WHERE a.learner_id = l.id AND a.module_id = %(module)s
+                   AND a.cycle_id IS NOT DISTINCT FROM %(cycle)s
                    AND a.finished_at IS NOT NULL
                  ORDER BY a.attempt_no DESC LIMIT 1)        AS latest_score,
                (SELECT a.out_of FROM attempt a
                  WHERE a.learner_id = l.id AND a.module_id = %(module)s
+                   AND a.cycle_id IS NOT DISTINCT FROM %(cycle)s
                    AND a.finished_at IS NOT NULL
                  ORDER BY a.attempt_no DESC LIMIT 1)        AS out_of,
                c.serial   AS certificate,
@@ -118,10 +143,12 @@ def people(module_id: int) -> List[Dict[str, Any]]:
         FROM learner l
         LEFT JOIN enrolment e
                ON e.learner_id = l.id AND e.module_id = %(module)s
+              AND e.cycle_id IS NOT DISTINCT FROM %(cycle)s
         LEFT JOIN certificate c
                ON c.learner_id = l.id AND c.module_id = %(module)s
+              AND c.cycle_id IS NOT DISTINCT FROM %(cycle)s
         ORDER BY l.department, l.display_name, l.email
-        """, {"module": module_id})
+        """, {"module": module_id, "cycle": cycles.current_id(module_id)})
 
 
 def questions(module_id: int) -> List[Dict[str, Any]]:

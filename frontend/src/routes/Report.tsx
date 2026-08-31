@@ -3,6 +3,7 @@ import { useParams } from "react-router"
 import { AlertTriangle, Download, MailWarning } from "lucide-react"
 
 import { api, reportExportUrl } from "../api/client"
+import { dueDate } from "../format"
 import type { Report as ReportData, ReportPerson } from "../api/types"
 
 /**
@@ -59,6 +60,27 @@ export function Report() {
           <p className="mt-1 text-muted">
             Individual results, not anonymous statistics.
           </p>
+          {/* Which period the figures below are about. Without it "3 of 40
+              passed" is a number somebody will read as being about now when
+              it is about a year that closed in March. */}
+          {data.summary.cycle && (
+            <p className="mt-2 text-sm">
+              <span className="font-medium">{data.summary.cycle.name}</span>
+              {data.summary.cycle.due_at && (
+                <span className={data.summary.overdue ? "text-wrong"
+                                                      : "text-muted"}>
+                  {" · "}
+                  {data.summary.overdue ? "was due " : "due "}
+                  {dueDate(data.summary.cycle.due_at)}
+                </span>
+              )}
+              {data.cycles.length > 1 && (
+                <span className="text-muted">
+                  {" · "}{data.cycles.length} cycles on record
+                </span>
+              )}
+            </p>
+          )}
         </div>
         <a
           href={reportExportUrl(slug)}

@@ -12,8 +12,9 @@ import type { Completion } from "../api/types"
  * things they might have come for: what they scored, when, and the
  * certificate.
  */
-export function Completed({ title, completed }:
-                          { title: string; completed: Completion }) {
+export function Completed({ title, completed, cycle }:
+                          { title: string; completed: Completion
+                            cycle?: { name: string } | null }) {
   const on = new Date(completed.issued_at)
   return (
     <div className="mx-auto max-w-2xl px-5 py-12">
@@ -23,7 +24,9 @@ export function Completed({ title, completed }:
         <h1 className="mt-3 text-xl font-semibold">
           You have completed this training
         </h1>
-        <p className="mt-2 text-muted">{title}</p>
+        <p className="mt-2 text-muted">
+          {title}{cycle ? ` · ${cycle.name}` : ""}
+        </p>
 
         <dl className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-2">
           <div>

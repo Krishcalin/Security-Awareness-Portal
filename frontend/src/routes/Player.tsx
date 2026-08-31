@@ -5,6 +5,7 @@ import {
 } from "lucide-react"
 
 import { api } from "../api/client"
+import { dueDate } from "../format"
 import type { Lesson, ModuleDetail } from "../api/types"
 import { Narrator, type NarratorStatus } from "../narration"
 import { Completed } from "./Completed"
@@ -403,7 +404,8 @@ export function Player() {
   // lessons — the server stops serving them — and `!lesson` would otherwise
   // leave somebody who has passed staring at "Loading…" for ever.
   if (detail?.completed && !detail.reviewing) {
-    return <Completed title={detail.title} completed={detail.completed} />
+    return <Completed title={detail.title} completed={detail.completed}
+                      cycle={detail.cycle} />
   }
   if (!detail || !lesson) {
     return <p className="mx-auto max-w-4xl px-5 py-10 text-muted">Loading…</p>
@@ -418,6 +420,20 @@ export function Player() {
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
+      {detail.previously && (
+        <p className="mb-4 rounded-lg border border-line bg-sunk px-4 py-3
+                      text-sm text-muted" role="status">
+          You completed this on{" "}
+          {new Date(detail.previously.issued_at).toLocaleDateString(undefined,
+            { day: "numeric", month: "long", year: "numeric" })}
+          {detail.previously.cycle_name
+            ? ` for ${detail.previously.cycle_name}` : ""}.
+          {detail.cycle ? ` ${detail.cycle.name} is now due` : " It is due again"}
+          {detail.cycle?.due_at ? `, by ${dueDate(detail.cycle.due_at)}.` : "."}
+          {" "}That certificate is still yours and still downloadable.
+        </p>
+      )}
+
       {/* Said plainly, every time. An exception that looks from the inside
           exactly like not having passed is one that gets mistaken for a bug in
           the lock — and one that nobody notices is still switched on. */}

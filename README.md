@@ -101,8 +101,8 @@ never reach the thing that runs.
 ### Tests
 
 ```bash
-python -m pytest                # 274, needs the database from docker compose
-cd frontend && npm test         # 122
+python -m pytest                # 293, needs the database from docker compose
+cd frontend && npm test         # 125
 ```
 
 ---
@@ -417,6 +417,46 @@ Somebody who has passed still sees where the course was: the date, the score,
 which attempt, the serial, and a button that downloads the certificate. Closed
 is not hidden — the person has to be able to see that they did it.
 
+### When it comes round again
+
+Awareness training is not a thing somebody does once — the regulations this
+course teaches require it periodically — so a course that closed permanently
+would have had to be rebuilt the first time a second year arrived.
+
+A **cycle** is a named period: "2027 annual refresher", opening on a date,
+with an optional date it is due by. The course is closed to somebody holding a
+certificate for the *current* cycle and open to everybody else, which makes
+opening the next one the whole of the administrative act:
+
+```bash
+docker compose exec app python -m server.cycle --list
+docker compose exec app python -m server.cycle     --open "2027 annual refresher" --due 2027-03-31
+```
+
+**A module with no cycles behaves exactly as it did before**: passing closes
+it for good. The first `--open` is the moment that changes, and it says how
+many people it has just made due.
+
+**Nothing is deleted and no certificate is invalidated.** Last year's is still
+the record of last year, which is what an auditor is asking to see when they
+ask about last year — and a cycle cannot be deleted while an attempt or a
+certificate points at it. What a new cycle changes is that the course opens
+again, progress restarts at the first slide, and the attempt number starts at
+one, so "passed first time" means first time *this year* rather than at some
+point since 2026.
+
+**Why a period rather than an expiry date on each certificate.** "Valid for
+twelve months from the day you passed" gives every person a private deadline,
+and the question an auditor asks is not "is Jaya's certificate still valid"
+but "show me that everybody completed the 2027 training". One organisation-wide
+period answers that; a thousand anniversaries do not.
+
+**A cycle can be dated ahead**, and does not take effect until then; one dated
+backwards adopts the certificates already earned inside it, so opening the
+year's cycle in March does not ask the people who finished in January to do it
+twice. **The report is scoped to the cycle in force and says which one it is**
+— "21 passed" that quietly spans four years answers a question nobody asked.
+
 **One exception, named and noisy.** `CONTENT_REVIEWERS` is a list of email
 addresses that may re-open a course they have already passed, so that whoever
 writes and checks the material can look at it without having to be somebody
@@ -432,12 +472,8 @@ is one that gets mistaken for a bug in the lock. The server logs a warning
 naming everybody on the list every time it starts, so it cannot sit in a
 deployment unnoticed. Empty unless somebody sets it.
 
-**There is no way to reopen a completion properly yet.** Periodic re-training
-is a requirement in this sector, and when it comes round this will need a way
-to begin a new cycle without deleting the record of the last one. Today the
-only lever is removing the certificate row by hand, which takes the evidence
-with it. `CONTENT_REVIEWERS` is not that mechanism and is not a substitute for
-it: it lets somebody read a course again, not take it again.
+`CONTENT_REVIEWERS` is not how a course comes round again — see the cycles
+above for that. It lets somebody read a course again, not take it again.
 
 
 ## Picking up where you left off

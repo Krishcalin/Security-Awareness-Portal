@@ -34,6 +34,8 @@ export interface ModuleSummary {
    *  knowledge check does not. */
   reviewing: boolean
   certificate_serial: string | null
+  cycle_name: string | null
+  cycle_due_at: string | null
   /** How many are in the bank the ten are drawn from. `questions` above is
    *  what a learner actually answers. */
   bank: number
@@ -76,6 +78,23 @@ export interface Completion {
   attempt_no: number
 }
 
+/** A period the training has to be completed within. Null on a portal where
+ *  nobody has opened one, which behaves as it always did: passing closes the
+ *  course for good. */
+export interface Cycle {
+  id: number
+  name: string
+  opens_at: string
+  due_at: string | null
+}
+
+/** A certificate from an earlier period, for somebody who is due again. */
+export interface EarlierPass {
+  serial: string
+  issued_at: string
+  cycle_name: string | null
+}
+
 export interface ModuleDetail {
   slug: string
   title: string
@@ -89,6 +108,9 @@ export interface ModuleDetail {
   /** See ModuleSummary above. When this is set, `completed` is too — and the
    *  slides are served anyway. */
   reviewing: boolean
+  cycle: Cycle | null
+  /** Set only when they passed a PREVIOUS cycle and this one is outstanding. */
+  previously: EarlierPass | null
   question_count: number
   question_bank: number
   enrolment: Enrolment | null
@@ -192,6 +214,10 @@ export interface Report {
   module: { slug: string; title: string; content_hash: string }
   /** Six numbers, never one. See server/reporting.py. */
   summary: {
+    /** The period every figure below is about. Null on a portal where nobody
+     *  has opened a cycle, where they are about all of time. */
+    cycle: Cycle | null
+    overdue: boolean
     people: number
     never_opened: number
     opened: number
@@ -200,6 +226,7 @@ export interface Report {
     passed: number
     passed_first_time: number
   }
+  cycles: (Cycle & { passed: number; open: boolean })[]
   questions: ReportQuestion[]
   slides: ReportSlide[]
   departments: { department: string; people: number; reached_end: number; passed: number }[]

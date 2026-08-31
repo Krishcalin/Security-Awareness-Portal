@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router"
 import { Award, Clock, ListChecks, PlayCircle } from "lucide-react"
 
 import { api, certificateUrl } from "../api/client"
+import { shortDueDate } from "../format"
 import type { ModuleSummary } from "../api/types"
 
 /**
@@ -123,6 +124,16 @@ export function Home() {
                         `, drawn from ${module.bank}`}
                     </span>
                     <span className={status.tone}>{status.label}</span>
+                    {/* Which period this is, and by when. Only where somebody
+                        has opened one — a portal with no cycles has nothing
+                        useful to say here. */}
+                    {module.cycle_name && !module.passed && (
+                      <span>
+                        {module.cycle_name}
+                        {module.cycle_due_at &&
+                          ` · due ${shortDueDate(module.cycle_due_at)}`}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-col items-stretch gap-2">

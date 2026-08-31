@@ -143,6 +143,16 @@ def test_every_account_flag_the_readme_names_is_a_real_one():
         assert '"%s"' % flag in declared, "%s is not a flag it accepts" % flag
 
 
+def test_the_cycle_commands_the_readme_names_are_real():
+    import inspect
+
+    from server import cycle
+    declared = inspect.getsource(cycle.main)
+    for flag in ("--list", "--open", "--due"):
+        assert "server.cycle" in README and flag in README, flag
+        assert '"%s"' % flag in declared, "%s is not a flag it accepts" % flag
+
+
 def test_the_password_rules_in_the_readme_are_the_ones_in_the_code():
     """Three numbers somebody will be told over the phone by a security team
     reading this page."""

@@ -38,8 +38,8 @@ from pydantic import BaseModel, Field
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from server import (auth, certificate, content, db, entra, ingest, mailer,
-                    passwords, reporting)
+from server import (auth, certificate, content, cycles, db, entra, ingest,
+                    mailer, passwords, reporting)
 from server.config import settings
 
 log = logging.getLogger(__name__)
@@ -188,16 +188,24 @@ def _begin_attempt(learner: Dict[str, Any], module: Dict[str, Any],
             with db.connection() as conn:
                 attempt = conn.execute(
                     """
-                    INSERT INTO attempt (learner_id, module_id, attempt_no,
+                    INSERT INTO attempt (learner_id, module_id, cycle_id,
+                                         attempt_no,
                                          content_hash, out_of, question_set)
-                    VALUES (%(learner)s, %(module)s,
+                    VALUES (%(learner)s, %(module)s, %(cycle)s,
+                            -- Numbered within the cycle. "Passed on the third
+                            -- go" has to mean this year's third go; counted
+                            -- across every year it stops being evidence about
+                            -- anything and becomes a length of service.
                             COALESCE((SELECT max(attempt_no) + 1 FROM attempt
                                        WHERE learner_id = %(learner)s
-                                         AND module_id = %(module)s), 1),
+                                         AND module_id = %(module)s
+                                         AND cycle_id IS NOT DISTINCT FROM
+                                             %(cycle)s), 1),
                             %(hash)s, %(out_of)s, %(fingerprint)s)
                     RETURNING *
                     """,
                     {"learner": learner["id"], "module": module["id"],
+                     "cycle": cycles.current_id(module["id"]),
                      "hash": module["content_hash"], "out_of": len(drawn),
                      "fingerprint": _fingerprint(drawn)}).fetchone()
                 for position, question_id in enumerate(drawn):
@@ -241,27 +249,23 @@ def me(learner: Dict[str, Any] = Depends(auth.current_learner)):
 
 
 def _already_passed(learner_id: int, module_id: int):
-    """The certificate this person already holds for this module, or None.
+    """The certificate this person holds for the CURRENT cycle, or None.
 
     THE CERTIFICATE ROW IS THE RECORD OF A SUCCESSFUL COMPLETION. It names the
-    attempt that earned it, the score as it stood, the date, and the name as
-    printed. There is deliberately no second `passed` flag on the enrolment:
-    a second place to write it down is a second place for it to disagree, and
-    the pass mark is a setting that can change — a flag derived fresh each time
-    would quietly un-pass people the day somebody moved the threshold, while a
-    certificate is a statement about a moment that stays true.
+    attempt that earned it, the score as it stood, the date, the name as
+    printed and the cycle it satisfied. There is deliberately no second
+    `passed` flag on the enrolment: a second place to write it down is a second
+    place for it to disagree, and the pass mark is a setting that can change —
+    a flag derived fresh each time would quietly un-pass people the day
+    somebody moved the threshold, while a certificate is a statement about a
+    moment that stays true.
 
-    The earliest one, when there are several. A retake that passes again does
-    not move the date somebody completed the training.
+    Scoped to the cycle in force, which is what makes annual re-training work:
+    last year's certificate is still the record of last year and no longer
+    closes this year's course. A module with no cycles has one implicit period
+    that never ends, so this reads exactly as it used to.
     """
-    return db.one(
-        """
-        SELECT c.serial, c.issued_at, c.score, c.out_of, c.name_printed,
-               a.attempt_no
-        FROM certificate c JOIN attempt a ON a.id = c.attempt_id
-        WHERE c.learner_id = %s AND c.module_id = %s
-        ORDER BY c.issued_at LIMIT 1
-        """, (learner_id, module_id))
+    return cycles.standing(learner_id, module_id)["held"]
 
 
 @app.get("/api/modules")
@@ -300,15 +304,38 @@ def modules(learner: Dict[str, Any] = Depends(auth.current_learner)):
                -- Whether they passed is decided here, against the same
                -- threshold `finish` uses. The browser is not asked to work it
                -- out from a score, because then there are two answers.
+               --
+               -- For the cycle in force, not ever: last year's certificate is
+               -- the record of last year and does not mean this year is done.
                EXISTS (SELECT 1 FROM certificate c
                         WHERE c.module_id = m.id
-                          AND c.learner_id = %(learner)s) AS passed,
+                          AND c.learner_id = %(learner)s
+                          AND c.cycle_id IS NOT DISTINCT FROM
+                              (SELECT t.id FROM training_cycle t
+                                WHERE t.module_id = m.id AND t.opens_at <= now()
+                                ORDER BY t.opens_at DESC, t.id DESC
+                                LIMIT 1)) AS passed,
+               -- The most recent one they hold, whichever cycle earned it:
+               -- somebody due again must still be able to reach last year's.
                (SELECT c.serial FROM certificate c
                  WHERE c.module_id = m.id AND c.learner_id = %(learner)s
-                 ORDER BY c.issued_at DESC LIMIT 1) AS certificate_serial
+                 ORDER BY c.issued_at DESC LIMIT 1) AS certificate_serial,
+               (SELECT t.name FROM training_cycle t
+                 WHERE t.module_id = m.id AND t.opens_at <= now()
+                 ORDER BY t.opens_at DESC, t.id DESC LIMIT 1) AS cycle_name,
+               (SELECT t.due_at FROM training_cycle t
+                 WHERE t.module_id = m.id AND t.opens_at <= now()
+                 ORDER BY t.opens_at DESC, t.id DESC LIMIT 1) AS cycle_due_at
         FROM module m
+        -- This cycle's progress, not last cycle's. Without the cycle here the
+        -- front page would offer to "Resume" a course at slide 31 that the
+        -- person has not started this time round.
         LEFT JOIN enrolment e
                ON e.module_id = m.id AND e.learner_id = %(learner)s
+              AND e.cycle_id IS NOT DISTINCT FROM
+                  (SELECT t.id FROM training_cycle t
+                    WHERE t.module_id = m.id AND t.opens_at <= now()
+                    ORDER BY t.opens_at DESC, t.id DESC LIMIT 1)
         WHERE m.published
         ORDER BY m.sort_order, m.id
         """,
@@ -328,26 +355,29 @@ def module_detail(slug: str,
     when an attempt is started, so they are not sitting in the page source
     while somebody reads the slides."""
     module = _module(slug)
+    cycle_id = cycles.current_id(module["id"])
     db.execute(
         """
-        INSERT INTO enrolment (learner_id, module_id, started_at)
-        VALUES (%s, %s, now())
-        ON CONFLICT (learner_id, module_id) DO UPDATE
+        INSERT INTO enrolment (learner_id, module_id, cycle_id, started_at)
+        VALUES (%s, %s, %s, now())
+        ON CONFLICT (learner_id, module_id, cycle_id) DO UPDATE
             SET started_at = COALESCE(enrolment.started_at, now())
         """,
-        (learner["id"], module["id"]))
+        (learner["id"], module["id"], cycle_id))
     lessons = db.query(
         "SELECT ordinal, title, body, animation, image, narration, audio_url, "
         "audio_timings_url, narration_seconds "
         "FROM lesson WHERE module_id = %s ORDER BY ordinal",
         (module["id"],))
-    passed = _already_passed(learner["id"], module["id"])
+    standing = cycles.standing(learner["id"], module["id"])
+    passed = standing["held"]
     reviewing = bool(passed) and _may_review(learner)
 
     enrolment = db.one(
         "SELECT started_at, completed_at, furthest_ordinal FROM enrolment "
-        "WHERE learner_id = %s AND module_id = %s",
-        (learner["id"], module["id"]))
+        "WHERE learner_id = %s AND module_id = %s "
+        "  AND cycle_id IS NOT DISTINCT FROM %s",
+        (learner["id"], module["id"], cycle_id))
     return {
         "slug": module["slug"],
         "title": module["title"],
@@ -364,6 +394,10 @@ def module_detail(slug: str,
         # and unauthenticated, so anybody with a URL still has them.
         "lessons": [] if passed and not reviewing else lessons,
         "completed": passed,
+        # Which period this is, for a screen that has to say "the 2027
+        # refresher is due" rather than "you have done this before".
+        "cycle": standing["cycle"],
+        "previously": standing["previous"],
         # Set when somebody is being shown a course they have already passed
         # because their address is listed. The screen says so: an exception
         # that looks from the inside exactly like not having passed is one
@@ -385,6 +419,7 @@ def record_progress(slug: str, progress: Progress,
     """How far they have got. Only ever moves forward — scrolling back to
     slide two does not mean they have unlearned slides three to eight."""
     module = _module(slug)
+    cycle_id = cycles.current_id(module["id"])
     if _already_passed(learner["id"], module["id"]):
         # Nothing left to record. Somebody with a tab still open from before
         # they passed must not be able to move the record behind the
@@ -396,16 +431,17 @@ def record_progress(slug: str, progress: Progress,
             # own record does not move either way.
             return db.one(
                 "SELECT furthest_ordinal, last_ordinal FROM enrolment "
-                "WHERE learner_id = %s AND module_id = %s",
-                (learner["id"], module["id"]))
+                "WHERE learner_id = %s AND module_id = %s "
+                "  AND cycle_id IS NOT DISTINCT FROM %s",
+                (learner["id"], module["id"], cycle_id))
         raise HTTPException(status_code=409,
                             detail="this training has already been passed")
     row = db.one(
         """
-        INSERT INTO enrolment (learner_id, module_id, started_at,
+        INSERT INTO enrolment (learner_id, module_id, cycle_id, started_at,
                                furthest_ordinal, last_ordinal, last_seen_at)
-        VALUES (%s, %s, now(), %s, %s, now())
-        ON CONFLICT (learner_id, module_id) DO UPDATE
+        VALUES (%s, %s, %s, now(), %s, %s, now())
+        ON CONFLICT (learner_id, module_id, cycle_id) DO UPDATE
             SET furthest_ordinal = greatest(enrolment.furthest_ordinal,
                                             EXCLUDED.furthest_ordinal),
                 -- Where they actually are, which is not the same number.
@@ -417,7 +453,7 @@ def record_progress(slug: str, progress: Progress,
                 started_at = COALESCE(enrolment.started_at, now())
         RETURNING furthest_ordinal, last_ordinal
         """,
-        (learner["id"], module["id"], progress.furthest_ordinal,
+        (learner["id"], module["id"], cycle_id, progress.furthest_ordinal,
          progress.furthest_ordinal))
     return row
 
@@ -448,8 +484,9 @@ def start_attempt(slug: str,
 
     attempt = db.one(
         "SELECT * FROM attempt WHERE learner_id = %s AND module_id = %s "
+        "AND cycle_id IS NOT DISTINCT FROM %s "
         "AND finished_at IS NULL ORDER BY attempt_no DESC LIMIT 1",
-        (learner["id"], module["id"]))
+        (learner["id"], module["id"], cycles.current_id(module["id"])))
     if not attempt:
         attempt = _begin_attempt(learner, module, questions)
 
@@ -550,10 +587,12 @@ def finish(attempt_id: int, background: BackgroundTasks,
         "UPDATE attempt SET finished_at = now(), score = %s, out_of = %s "
         "WHERE id = %s RETURNING attempt_no, score, out_of, finished_at",
         (scored["score"], out_of, attempt_id))
+    cycle_id = cycles.current_id(attempt["module_id"])
     db.execute(
         "UPDATE enrolment SET completed_at = COALESCE(completed_at, now()) "
-        "WHERE learner_id = %s AND module_id = %s",
-        (learner["id"], attempt["module_id"]))
+        "WHERE learner_id = %s AND module_id = %s "
+        "  AND cycle_id IS NOT DISTINCT FROM %s",
+        (learner["id"], attempt["module_id"], cycle_id))
 
     # The pass mark lives here and nowhere else. A threshold the browser also
     # holds is a threshold the two can disagree about, and the disagreement
@@ -604,6 +643,10 @@ def resume_path(learner_id: int) -> str:
         """
         SELECT m.slug FROM attempt a JOIN module m ON m.id = a.module_id
         WHERE a.learner_id = %s AND a.finished_at IS NULL
+          AND a.cycle_id IS NOT DISTINCT FROM
+              (SELECT t.id FROM training_cycle t
+                WHERE t.module_id = m.id AND t.opens_at <= now()
+                ORDER BY t.opens_at DESC, t.id DESC LIMIT 1)
         ORDER BY a.started_at DESC LIMIT 1
         """, (learner_id,))
     if attempt:
@@ -614,12 +657,26 @@ def resume_path(learner_id: int) -> str:
         SELECT m.slug, e.last_ordinal, e.furthest_ordinal
         FROM enrolment e JOIN module m ON m.id = e.module_id
         WHERE e.learner_id = %s AND e.completed_at IS NULL AND m.published
-          -- And not one they have already passed. Sending somebody back to
-          -- slide twelve of a course they finished last month is the portal
-          -- telling them it has not noticed.
+          -- This cycle's row. An unfinished one from last year says slide
+          -- twelve, and this year they are on slide nothing.
+          AND e.cycle_id IS NOT DISTINCT FROM
+              (SELECT t.id FROM training_cycle t
+                WHERE t.module_id = m.id AND t.opens_at <= now()
+                ORDER BY t.opens_at DESC, t.id DESC LIMIT 1)
+          -- And not one they have already passed THIS CYCLE. Sending
+          -- somebody back to slide twelve of a course they finished last
+          -- month is the portal telling them it has not noticed; sending them
+          -- past one that has come round again is the same mistake the other
+          -- way about.
           AND NOT EXISTS (SELECT 1 FROM certificate c
                            WHERE c.learner_id = e.learner_id
-                             AND c.module_id = e.module_id)
+                             AND c.module_id = e.module_id
+                             AND c.cycle_id IS NOT DISTINCT FROM
+                                 (SELECT t.id FROM training_cycle t
+                                   WHERE t.module_id = e.module_id
+                                     AND t.opens_at <= now()
+                                   ORDER BY t.opens_at DESC, t.id DESC
+                                   LIMIT 1))
         ORDER BY e.last_seen_at DESC NULLS LAST, e.started_at DESC LIMIT 1
         """, (learner_id,))
     if not open_module:
@@ -662,13 +719,18 @@ def _issue(learner: Dict[str, Any], module: Dict[str, Any], attempt_id: int,
     return db.one(
         """
         INSERT INTO certificate (serial, learner_id, module_id, attempt_id,
-                                 name_printed, score, out_of)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                 name_printed, score, out_of, cycle_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (attempt_id) DO UPDATE SET serial = certificate.serial
         RETURNING *
         """,
         (_serial(), learner["id"], module["id"], attempt_id, name,
-         score, out_of))
+         score, out_of,
+         # Stamped now rather than worked out later by comparing dates. A
+         # cycle's opening date can be corrected, and the one thing worse
+         # than not knowing which year somebody completed is being told the
+         # wrong one with confidence.
+         cycles.current_id(module["id"])))
 
 
 def _deliver(certificate_id: int) -> None:
@@ -735,6 +797,9 @@ def report(slug: str,
         # Several numbers rather than one. The single figure everybody wants
         # is "94% trained", and it is the reason this whole product exists.
         "summary": reporting.summary(module["id"]),
+        # Every cycle there has been, so the report can show which period it
+        # is describing and what came before it.
+        "cycles": cycles.listing(module["id"]),
         "questions": reporting.questions(module["id"]),
         "slides": reporting.slides(module["id"]),
         "departments": reporting.departments(module["id"]),

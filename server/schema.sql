@@ -382,3 +382,103 @@ CREATE UNIQUE INDEX IF NOT EXISTS learner_email_lower_idx
 -- immediately rather than eventually.
 ALTER TABLE learner ADD COLUMN IF NOT EXISTS
     session_epoch integer NOT NULL DEFAULT 0;
+
+-- ── training cycles ────────────────────────────────────────────────────────
+--
+-- Awareness training is not a thing somebody does once. The regulations this
+-- course teaches — CEA's among them — require it PERIODICALLY, and a portal
+-- that closes permanently on a pass is a portal that has to be rebuilt the
+-- first time a second year comes round.
+--
+-- A cycle is a named period: "2027 annual refresher", opening on a date, with
+-- an optional date it is due by. The course is closed to somebody who holds a
+-- certificate for the CURRENT cycle and open to everybody else, which makes
+-- "open the next cycle" the whole of the administrative act.
+--
+-- WHY NOT AN EXPIRY ON THE CERTIFICATE. Because "valid for twelve months from
+-- the day you passed" gives every person their own private deadline, and the
+-- question an auditor asks is not "is Jaya's certificate still valid" but
+-- "show me that everybody completed the 2027 training". One organisation-wide
+-- period answers that; a thousand anniversaries do not.
+CREATE TABLE IF NOT EXISTS training_cycle (
+    id         bigserial PRIMARY KEY,
+    module_id  bigint NOT NULL REFERENCES module(id) ON DELETE CASCADE,
+    -- What it is called in a report: "2027 annual refresher".
+    name       text NOT NULL,
+    opens_at   timestamptz NOT NULL DEFAULT now(),
+    -- When everybody is meant to have finished by. Optional, because plenty
+    -- of organisations run a cycle with no fixed end.
+    due_at     timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (module_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS training_cycle_module_idx
+    ON training_cycle (module_id, opens_at DESC);
+
+-- Which cycle a pass satisfied, stamped at the moment it was issued.
+--
+-- Not worked out afterwards by comparing dates: a cycle's opening date can be
+-- corrected, and a certificate is a statement about a moment. The one thing
+-- worse than not knowing which year somebody completed is being told the wrong
+-- one with confidence.
+ALTER TABLE certificate ADD COLUMN IF NOT EXISTS
+    cycle_id bigint REFERENCES training_cycle(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS certificate_cycle_idx
+    ON certificate (module_id, cycle_id, learner_id);
+
+-- Progress belongs to a cycle too, so a new one starts at the first slide
+-- rather than at "completed" — and last year's row is still there to say how
+-- far somebody got when they did not finish.
+ALTER TABLE enrolment ADD COLUMN IF NOT EXISTS
+    cycle_id bigint REFERENCES training_cycle(id) ON DELETE CASCADE;
+
+-- NULLS NOT DISTINCT so that the rows from before any cycle existed still
+-- collide with each other on upsert. Without it every progress write from a
+-- deployment with no cycles would insert a new row instead of updating one.
+ALTER TABLE enrolment DROP CONSTRAINT IF EXISTS enrolment_learner_id_module_id_key;
+ALTER TABLE enrolment DROP CONSTRAINT IF EXISTS enrolment_per_cycle;
+ALTER TABLE enrolment ADD CONSTRAINT enrolment_per_cycle
+    UNIQUE NULLS NOT DISTINCT (learner_id, module_id, cycle_id);
+
+-- Which cycle an attempt belongs to, so `attempt_no` counts within a period.
+--
+-- "Passed on the third go" has to mean this year's third go. Counted across
+-- every year the number stops being evidence about whether somebody knew the
+-- material and becomes a length of service.
+ALTER TABLE attempt ADD COLUMN IF NOT EXISTS
+    cycle_id bigint REFERENCES training_cycle(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS attempt_cycle_idx
+    ON attempt (learner_id, module_id, cycle_id);
+
+-- Attempt numbers restart each cycle, so the uniqueness that protects them has
+-- to know about cycles too. Without this the second cycle's first attempt
+-- collides with the first cycle's first attempt — and it collides inside the
+-- retry loop that exists for a redraw, so it presents as "could not draw a
+-- question set" rather than as anything to do with a year boundary.
+ALTER TABLE attempt DROP CONSTRAINT IF EXISTS attempt_learner_id_module_id_attempt_no_key;
+ALTER TABLE attempt DROP CONSTRAINT IF EXISTS attempt_no_per_cycle;
+ALTER TABLE attempt ADD CONSTRAINT attempt_no_per_cycle
+    UNIQUE NULLS NOT DISTINCT (learner_id, module_id, cycle_id, attempt_no);
+
+-- A cycle cannot be deleted out from under the work done in it.
+--
+-- These arrived as ON DELETE SET NULL / CASCADE, which is wrong in a way that
+-- only shows up once: deleting a cycle would quietly move its attempts into
+-- the "no cycle" period, where their attempt numbers collide with the ones
+-- already there, and would take its enrolments with it. A period people were
+-- certified in is not a thing to erase — RESTRICT says so, and says it at the
+-- moment somebody tries rather than afterwards.
+ALTER TABLE attempt DROP CONSTRAINT IF EXISTS attempt_cycle_id_fkey;
+ALTER TABLE attempt ADD CONSTRAINT attempt_cycle_id_fkey
+    FOREIGN KEY (cycle_id) REFERENCES training_cycle(id) ON DELETE RESTRICT;
+
+ALTER TABLE certificate DROP CONSTRAINT IF EXISTS certificate_cycle_id_fkey;
+ALTER TABLE certificate ADD CONSTRAINT certificate_cycle_id_fkey
+    FOREIGN KEY (cycle_id) REFERENCES training_cycle(id) ON DELETE RESTRICT;
+
+ALTER TABLE enrolment DROP CONSTRAINT IF EXISTS enrolment_cycle_id_fkey;
+ALTER TABLE enrolment ADD CONSTRAINT enrolment_cycle_id_fkey
+    FOREIGN KEY (cycle_id) REFERENCES training_cycle(id) ON DELETE RESTRICT;
