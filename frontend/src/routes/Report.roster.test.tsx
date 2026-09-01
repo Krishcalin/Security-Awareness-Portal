@@ -37,6 +37,8 @@ const BASE = {
     reached_end: 1, passed: 1, passed_first_time: 1,
   },
   cycles: [], questions: [], slides: [], departments: [], off_roster: [],
+  attention: { answered: 0, correct: 0, people: 0, correct_rate: null,
+               min_answers: 20, stops: [] },
   delivery: { issued: 1, emailed: 1, failed: 0, not_attempted: 0, failures: [] },
   thresholds: { min_answers: 20, not_discriminating: 0.95,
                 material_failed: 0.4, pass_mark: 0.7 },

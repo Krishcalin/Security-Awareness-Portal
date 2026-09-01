@@ -231,6 +231,58 @@ export function Report() {
         </p>
       </section>
 
+      {/* ── were they listening ──────────────────────────────────────── */}
+      {/* THE ONLY MEASURE OF ATTENTION DURING THE COURSE. Everything else on
+          this page describes the check at the end, which somebody can sit
+          perfectly well after leaving the narration playing to an empty room.
+          Two questions after every fifth slide cannot prove anybody was
+          listening; a person getting most of them wrong is evidence of
+          something, and it arrives while the course is still running. */}
+      {data.attention.answered > 0 && (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
+            Were they listening
+          </h2>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Figure label="Checkpoint answers" value={data.attention.answered} />
+            <Figure label="Right" value={data.attention.correct} strong />
+            <Figure label="People answering" value={data.attention.people} />
+          </div>
+          <p className="mt-3 max-w-prose text-sm text-muted">
+            {data.attention.correct_rate === null ? (
+              <>
+                Under {data.attention.min_answers} answers so far, so no
+                proportion is quoted — a rate from a handful of them is noise
+                wearing the costume of a statistic.
+              </>
+            ) : (
+              <>
+                <strong className="text-text">
+                  {Math.round(data.attention.correct_rate * 100)}%
+                </strong>{" "}
+                answered correctly. These are not marked and do not affect
+                anybody{"\u2019"}s result; they exist so that reaching the last
+                slide means somebody was there for it.
+              </>
+            )}
+          </p>
+          {data.attention.stops.length > 1 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {data.attention.stops.map((stop) => (
+                <span
+                  key={stop.after_ordinal}
+                  className="rounded-lg border border-line px-2.5 py-1 text-xs
+                             text-muted tabular-nums"
+                  title={`After slide ${stop.after_ordinal}`}
+                >
+                  slide {stop.after_ordinal}: {stop.correct}/{stop.answered}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ── where people stop ────────────────────────────────────────── */}
       {stalls.length > 0 && (
         <section className="mt-10">

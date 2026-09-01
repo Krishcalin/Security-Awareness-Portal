@@ -38,8 +38,8 @@ from pydantic import BaseModel, Field
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from server import (auth, certificate, content, cycles, db, entra, ingest,
-                    mailer, passwords, reporting, roster)
+from server import (auth, certificate, checkpoints, content, cycles, db,
+                    entra, ingest, mailer, passwords, reporting, roster)
 from server.config import settings
 
 log = logging.getLogger(__name__)
@@ -107,6 +107,12 @@ if MEDIA.is_dir():
 
 class Progress(BaseModel):
     furthest_ordinal: int = Field(ge=0)
+
+
+class CheckpointAnswer(BaseModel):
+    position: int = Field(ge=0)
+    chosen_index: int = Field(ge=0)
+    took_ms: Optional[int] = None
 
 
 class Answer(BaseModel):
@@ -413,6 +419,51 @@ def module_detail(slug: str,
     }
 
 
+# ── checkpoints: two questions every five slides ───────────────────────────
+
+@app.get("/api/modules/{slug}/checkpoints/{after_ordinal}")
+def checkpoint(slug: str, after_ordinal: int,
+               learner: Dict[str, Any] = Depends(auth.current_learner)):
+    """The two questions that stand between this slide and the next.
+
+    404 for a slide no checkpoint follows, so a client cannot manufacture one
+    at slide 7 and a mistyped url fails loudly rather than returning an empty
+    checkpoint that reads as "nothing to answer here".
+    """
+    module = _module(slug)
+    lesson_count = db.one(
+        "SELECT count(*) AS n FROM lesson WHERE module_id = %s",
+        (module["id"],))["n"]
+    if after_ordinal not in checkpoints.points_for(lesson_count):
+        raise HTTPException(status_code=404,
+                            detail="no checkpoint follows that slide")
+    return checkpoints.state(learner["id"], module["id"], after_ordinal)
+
+
+@app.post("/api/modules/{slug}/checkpoints/{after_ordinal}/answers")
+def answer_checkpoint(slug: str, after_ordinal: int, answer: CheckpointAnswer,
+                      learner: Dict[str, Any] = Depends(auth.current_learner)):
+    """Grade one checkpoint question and reveal it.
+
+    Graded here rather than in the browser, for the reason the knowledge check
+    gives: an answer the client checks is an answer the client can be told to
+    accept. The reveal comes back with it because showing the right answer and
+    the explanation is the whole point of a checkpoint — it is teaching, not
+    marking.
+    """
+    module = _module(slug)
+    try:
+        return checkpoints.answer(learner["id"], module["id"], after_ordinal,
+                                  answer.position, answer.chosen_index,
+                                  answer.took_ms)
+    except checkpoints.AlreadyAnswered:
+        raise HTTPException(
+            status_code=409,
+            detail="already answered — reload to see the explanation again")
+    except checkpoints.NoSuchQuestion as problem:
+        raise HTTPException(status_code=404, detail=str(problem))
+
+
 @app.post("/api/modules/{slug}/progress")
 def record_progress(slug: str, progress: Progress,
                     learner: Dict[str, Any] = Depends(auth.current_learner)):
@@ -481,6 +532,25 @@ def start_attempt(slug: str,
     if not questions:
         raise HTTPException(status_code=409,
                             detail="this module has no knowledge check")
+
+    # A CHECKPOINT QUESTION IS SPENT. The checkpoints between the slides show
+    # the correct answer and the explanation — that is what they are for — so
+    # dealing one of them again here would score whether somebody remembered
+    # being shown the answer twenty minutes ago. This module opens by saying
+    # the answer is never sent before it is earned; leaking it forwards is the
+    # same failure arriving from the other direction.
+    #
+    # The arithmetic is comfortable: a hundred questions, at most twelve spent
+    # across six checkpoints, ten dealt from the eighty-eight that remain. The
+    # guard below is for a re-authored module where it might not be.
+    spent = set(checkpoints.seen_question_ids(
+        learner["id"], module["id"], cycles.current_id(module["id"])))
+    unspent = [q for q in questions if q["id"] not in spent]
+    if len(unspent) >= settings.quiz_length:
+        questions = unspent
+    # Otherwise the whole bank is used and some overlap is accepted: refusing
+    # to start the check at all would be a worse answer to a content problem
+    # than a check with a question they have seen.
 
     attempt = db.one(
         "SELECT * FROM attempt WHERE learner_id = %s AND module_id = %s "
@@ -809,6 +879,11 @@ def report(slug: str,
         # once in the roster's never-signed-in list, and somebody can put the
         # two together. Empty when there is no roster to be off.
         "off_roster": roster.off_roster(module["id"]),
+        # What the checkpoints between the slides found. The only measure of
+        # attention DURING the course that this product has — everything else
+        # here is about the check at the end, which somebody can sit after
+        # leaving the narration playing to an empty room.
+        "attention": reporting.checkpoint_attention(module["id"]),
         "thresholds": {
             "min_answers": reporting.MIN_ANSWERS,
             "not_discriminating": reporting.NOT_DISCRIMINATING,

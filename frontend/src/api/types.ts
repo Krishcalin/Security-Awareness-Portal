@@ -140,6 +140,50 @@ export interface Reveal {
   teaches: number | null
 }
 
+/** server/checkpoints.py — two questions every five slides.
+ *
+ *  A narrated course can be left playing to an empty chair. This is the
+ *  smallest honest test that somebody is still there; it teaches rather than
+ *  marks, so a wrong answer reveals the right one and lets you past. */
+export interface CheckpointQuestion {
+  position: number
+  ordinal: number
+  prompt: string
+  options: string[]
+  /** Present once answered. Absent before, because the allowlist that builds
+   *  this payload has no `correct_index` in it — the answer is not in the
+   *  response to be found. */
+  answered?: CheckpointReveal
+}
+
+export interface CheckpointReveal extends Reveal {
+  chosen_index: number
+  position?: number
+}
+
+export interface CheckpointState {
+  after_ordinal: number
+  questions: CheckpointQuestion[]
+  /** Every question answered. The player will not go forward until it is
+   *  true — and it is true for a checkpoint with nothing to ask, so
+   *  re-authored content cannot produce a locked door. */
+  complete: boolean
+}
+
+/** server/reporting.py `checkpoint_attention` — what the checkpoints between
+ *  the slides found. The only measure of attention DURING the course; every
+ *  other figure on the report is about the check at the end. */
+export interface Attention {
+  answered: number
+  correct: number
+  people: number
+  /** Null below `min_answers`, where a proportion would be noise. */
+  correct_rate: number | null
+  min_answers: number
+  stops: { after_ordinal: number; answered: number; correct: number
+           correct_rate: number | null }[]
+}
+
 export interface Certificate {
   serial: string
   name_printed: string
@@ -267,6 +311,7 @@ export interface Report {
   questions: ReportQuestion[]
   slides: ReportSlide[]
   departments: { department: string; people: number; reached_end: number; passed: number }[]
+  attention: Attention
   off_roster: {
     learner_id: number; email: string; display_name: string
     department: string; started_at: string | null

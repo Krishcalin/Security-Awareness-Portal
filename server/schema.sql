@@ -549,3 +549,68 @@ CREATE UNIQUE INDEX IF NOT EXISTS roster_entry_module_email_idx
 
 CREATE INDEX IF NOT EXISTS roster_entry_expected_idx
     ON roster_entry (module_id) WHERE removed_at IS NULL;
+
+
+-- ── checkpoints: two questions every five slides ───────────────────────────
+--
+-- A narrated course can be left playing to an empty chair. Reaching the last
+-- slide proves the audio finished, which is the thing this product already
+-- refuses to call training. The checkpoint is the smallest honest test that
+-- somebody is still there: after every fifth slide, two questions about what
+-- has just been covered, answered before the course goes on.
+--
+-- IT IS NOT AN EXAM, AND MUST NOT BE SCORED LIKE ONE. Getting one wrong shows
+-- the right answer and the explanation and then continues. The graded check at
+-- the end is where a pass is earned; a checkpoint that could fail somebody
+-- would turn thirty-one slides into six exams, and the first thing anybody
+-- would do is stop answering honestly.
+--
+-- SEPARATE FROM `attempt` AND `response`, DELIBERATELY. Those two carry the
+-- graded check: attempts are numbered per cycle, `out_of` is the denominator
+-- of a pass, and a certificate hangs off one. Folding checkpoint answers into
+-- them would make "passed on the third attempt" mean something else and would
+-- put twelve ungraded answers into a ten-question score.
+--
+-- WHY THE DEAL IS STORED RATHER THAN RECOMPUTED. Two questions are drawn when
+-- the checkpoint is first reached and written down here with a null answer. A
+-- learner who reloads the page gets the same two — not a fresh draw, which
+-- would let somebody reload past a question they did not like until an easier
+-- pair arrived. It is the same reasoning as `attempt_question`.
+CREATE TABLE IF NOT EXISTS checkpoint_answer (
+    id            bigserial PRIMARY KEY,
+    learner_id    bigint NOT NULL REFERENCES learner(id) ON DELETE CASCADE,
+    module_id     bigint NOT NULL REFERENCES module(id) ON DELETE CASCADE,
+    -- Which run of the course this belongs to. Checkpoints come round again
+    -- with the training: last year's answers are not this year's evidence
+    -- that somebody was awake.
+    cycle_id      bigint REFERENCES training_cycle(id) ON DELETE RESTRICT,
+    -- The slide the checkpoint follows: 5, 10, 15 ... It is the position in
+    -- the course, not a question number, because that is what the player and
+    -- the resume logic both reason about.
+    after_ordinal integer NOT NULL,
+    position      integer NOT NULL,
+    question_id   bigint NOT NULL REFERENCES question(id) ON DELETE CASCADE,
+    -- Null until answered. Null is not "wrong": a checkpoint that has been
+    -- dealt and not yet reached is a different state from one somebody got
+    -- wrong, and the report must not read the first as the second.
+    chosen_index  integer,
+    correct       boolean,
+    took_ms       integer,
+    -- The wording as it stood on the screen. Content gets re-authored, and a
+    -- stored answer against a question nobody can reconstruct is not evidence.
+    asked         jsonb,
+    dealt_at      timestamptz NOT NULL DEFAULT now(),
+    answered_at   timestamptz
+);
+
+-- One deal per position per checkpoint per cycle. NULLS NOT DISTINCT because
+-- `cycle_id` is null on a portal where nobody has opened a cycle, and two null
+-- cycles are the same period rather than two different ones.
+CREATE UNIQUE INDEX IF NOT EXISTS checkpoint_answer_slot_idx
+    ON checkpoint_answer (learner_id, module_id, cycle_id, after_ordinal,
+                          position) NULLS NOT DISTINCT;
+
+-- The final check reads this to exclude what a checkpoint has already given
+-- away, so it is the index that matters for correctness rather than speed.
+CREATE INDEX IF NOT EXISTS checkpoint_answer_seen_idx
+    ON checkpoint_answer (learner_id, module_id, cycle_id);

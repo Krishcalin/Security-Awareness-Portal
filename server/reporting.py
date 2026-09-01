@@ -197,6 +197,60 @@ def _people_who_signed_in(module_id: int) -> List[Dict[str, Any]]:
         """, {"module": module_id, "cycle": cycles.current_id(module_id)})
 
 
+def checkpoint_attention(module_id: int) -> Dict[str, Any]:
+    """What the checkpoints found out, for the cycle in force.
+
+    THIS IS THE ONLY MEASURE OF ATTENTION THIS PRODUCT HAS. Everything else on
+    the report is about the graded check at the end, which somebody can sit
+    after leaving the narration playing to an empty chair. Six pairs of
+    questions spread through the course cannot prove somebody was listening,
+    but a person getting most of them wrong is evidence of something, and it
+    is evidence that arrives DURING the course rather than after it.
+
+    Reported as counts, with the proportion withheld below `MIN_ANSWERS` for
+    the reason the question statistics give: a rate over a handful of answers
+    is noise wearing the costume of a statistic.
+    """
+    cycle_id = cycles.current_id(module_id)
+    row = db.one(
+        """
+        SELECT count(*) FILTER (WHERE answered_at IS NOT NULL) AS answered,
+               count(*) FILTER (WHERE correct)                 AS correct,
+               count(DISTINCT learner_id) FILTER (
+                   WHERE answered_at IS NOT NULL)              AS people
+        FROM checkpoint_answer
+        WHERE module_id = %s AND cycle_id IS NOT DISTINCT FROM %s
+        """, (module_id, cycle_id))
+
+    answered = row["answered"] or 0
+    stops = db.query(
+        """
+        SELECT after_ordinal,
+               count(*) FILTER (WHERE answered_at IS NOT NULL) AS answered,
+               count(*) FILTER (WHERE correct)                 AS correct
+        FROM checkpoint_answer
+        WHERE module_id = %s AND cycle_id IS NOT DISTINCT FROM %s
+        GROUP BY after_ordinal ORDER BY after_ordinal
+        """, (module_id, cycle_id))
+
+    return {
+        "answered": answered,
+        "correct": row["correct"] or 0,
+        "people": row["people"] or 0,
+        # None below the floor, never a percentage of six answers.
+        "correct_rate": ((row["correct"] or 0) / answered
+                         if answered >= MIN_ANSWERS else None),
+        "min_answers": MIN_ANSWERS,
+        "stops": [
+            {"after_ordinal": s["after_ordinal"],
+             "answered": s["answered"],
+             "correct": s["correct"],
+             "correct_rate": (s["correct"] / s["answered"]
+                              if s["answered"] >= MIN_ANSWERS else None)}
+            for s in stops],
+    }
+
+
 def questions(module_id: int) -> List[Dict[str, Any]]:
     """How each question is behaving. This is the portal reporting on itself.
 

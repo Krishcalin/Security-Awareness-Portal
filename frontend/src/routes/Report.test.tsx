@@ -52,6 +52,8 @@ const DATA = {
     { ordinal: 3, title: "Phishing Emails", stopped_here: 1, reached: 27 },
   ],
   departments: [],
+  attention: { answered: 0, correct: 0, people: 0,
+               correct_rate: null, min_answers: 20, stops: [] },
   off_roster: [] as { learner_id: number; email: string; display_name: string
                       department: string; started_at: string | null
                       completed_at: string | null; certificate: string | null }[],

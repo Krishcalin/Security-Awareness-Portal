@@ -6,7 +6,8 @@ import {
 
 import { api } from "../api/client"
 import { dueDate } from "../format"
-import type { Lesson, ModuleDetail } from "../api/types"
+import type { CheckpointState, Lesson, ModuleDetail } from "../api/types"
+import { Checkpoint, checkpointAfter } from "../components/Checkpoint"
 import { Narrator, type NarratorStatus } from "../narration"
 import { Completed } from "./Completed"
 
@@ -131,6 +132,18 @@ export function Player() {
    * hearing that slide, which is the one you were in the middle of.
    */
   const [heardSlides, setHeardSlides] = useState<Set<number>>(new Set())
+
+  /* THE CHECKPOINT BETWEEN THIS SLIDE AND THE NEXT.
+   *
+   * `heardSlides` proves the audio reached the end; it cannot prove anybody
+   * was listening to it, and a course left playing to an empty chair reaches
+   * the last slide exactly as one that was watched. Two questions every fifth
+   * slide are the smallest honest test that somebody is still there.
+   *
+   * Held as state rather than derived, because whether it has been answered is
+   * the server's answer and not this component's: a learner who answered on
+   * their phone this morning does not do it again this afternoon. */
+  const [checkpoint, setCheckpoint] = useState<CheckpointState | null>(null)
   const [showTranscript, setShowTranscript] = useState(wantsTranscript)
 
   const narrator = useRef(new Narrator())
@@ -380,10 +393,33 @@ export function Player() {
     if (delta > 0 && !heardSlides.has(detail?.lessons[index]?.ordinal ?? -1)) {
       return
     }
+    // The arrow keys obey the checkpoint too. Checked here as well as on the
+    // button because this is the path a keyboard takes, and a gate that only
+    // exists on a button is a gate with a keyboard shortcut around it.
+    if (delta > 0 && checkpoint && !checkpoint.complete) return
     const wasPlaying = playing
     goTo(next)
     if (wasPlaying) window.setTimeout(() => speakLesson(next), 60)
-  }, [detail, goTo, heardSlides, index, lastIndex, playing, speakLesson])
+  }, [checkpoint, detail, goTo, heardSlides, index, lastIndex, playing,
+      speakLesson])
+
+  /* Fetched only once the slide has actually been heard: asking for it on
+   * arrival would put two questions about material somebody is still
+   * listening to on the screen underneath them. */
+  const ordinal = lesson?.ordinal ?? 0
+  const stop = detail ? checkpointAfter(ordinal, detail.lessons.length) : null
+  const heardThis = heardSlides.has(ordinal)
+  useEffect(() => {
+    if (stop === null || !heardThis) { setCheckpoint(null); return }
+    let cancelled = false
+    api.checkpoint(slug, stop)
+      .then((state) => { if (!cancelled) setCheckpoint(state) })
+      // A checkpoint that cannot be fetched must not become a locked door:
+      // the course is the thing somebody came for, and a network failure
+      // between two slides is not a reason to end their training.
+      .catch(() => { if (!cancelled) setCheckpoint(null) })
+    return () => { cancelled = true }
+  }, [slug, stop, heardThis])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -415,7 +451,10 @@ export function Player() {
   // this slide says anything, so they are not optional here.
   const nothingToHear = status === "unsupported" && !lesson.audio_url
   const atEnd = index === lastIndex
-  const mayGoOn = heardSlides.has(lesson.ordinal)
+  // Heard to the end AND past the checkpoint, where there is one. An
+  // unfetched checkpoint (`null`) does not block: see the catch above.
+  const checkpointBlocking = Boolean(checkpoint && !checkpoint.complete)
+  const mayGoOn = heardSlides.has(lesson.ordinal) && !checkpointBlocking
   const progress = ((index + 1) / detail.lessons.length) * 100
 
   return (
@@ -578,7 +617,9 @@ export function Player() {
           // page had stopped working.
           title={atEnd ? "The last slide"
                  : mayGoOn ? "Next slide"
-                 : "Listen to the end of this slide to continue"}
+                 : checkpointBlocking
+                   ? "Answer the two questions below to continue"
+                   : "Listen to the end of this slide to continue"}
         >
           <ChevronRight size={18} />
         </button>
@@ -613,6 +654,15 @@ export function Player() {
           Advance automatically
         </label>
       </div>
+
+      {/* THE QUESTIONS THAT STAND BETWEEN THIS SLIDE AND THE NEXT.
+          Rendered under the slide rather than over it: a modal would cover the
+          material the questions are about, and somebody who wants to check
+          what was said should be able to look at it. */}
+      {checkpoint && checkpoint.questions.length > 0 && (
+        <Checkpoint slug={slug} state={checkpoint}
+                    onComplete={setCheckpoint} />
+      )}
 
       <section className="mt-6 rounded-xl border border-line bg-surface p-5">
         <h2 className="text-xl font-semibold tracking-tight">{lesson.title}</h2>

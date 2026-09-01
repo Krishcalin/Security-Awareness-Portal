@@ -1,4 +1,5 @@
 import type {
+  CheckpointReveal, CheckpointState,
   Learner, ModuleDetail, ModuleSummary, Report, ReportPerson, Result, Reveal,
   StartedAttempt,
 } from "./types"
@@ -61,6 +62,16 @@ export const api = {
 
   finish: (attemptId: number) =>
     post<Result>(`/api/attempts/${attemptId}/finish`),
+
+  checkpoint: (slug: string, afterOrdinal: number) =>
+    request<CheckpointState>(
+      `/api/modules/${slug}/checkpoints/${afterOrdinal}`),
+
+  answerCheckpoint: (slug: string, afterOrdinal: number, position: number,
+                     chosenIndex: number, tookMs: number) =>
+    post<CheckpointReveal>(
+      `/api/modules/${slug}/checkpoints/${afterOrdinal}/answers`,
+      { position, chosen_index: chosenIndex, took_ms: tookMs }),
 
   /** Where this person left off, decided on the server. */
   resume: () => request<{ path: string }>("/api/resume"),

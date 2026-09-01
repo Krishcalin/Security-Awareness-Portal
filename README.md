@@ -308,10 +308,59 @@ hearing it.
 
 ---
 
+## Checkpoints: two questions every five slides
+
+Reaching the last slide proves the audio finished. It does not prove anybody
+was listening — a course left playing to an empty chair reaches the end exactly
+as one that was watched, and the forward arrow waiting for the narration is a
+gate on the *recording*, not on the person.
+
+So after every fifth slide — 5, 10, 15, 20, 25, 30 — the course stops and asks
+**two questions about the five slides just covered**. Answer them and it goes
+on. The arrow keys obey the same gate as the button, because a gate that only
+exists on a button is a gate with a keyboard shortcut around it.
+
+**Never after the last slide.** A checkpoint there is the knowledge check, and
+two ungraded questions immediately before the graded ten would be a duplicate
+and an odd thing to do to somebody about to sit an exam.
+
+**It teaches, it does not mark.** A wrong answer shows the right one *and the
+explanation*, and then lets you past. Nothing is scored and nothing is
+retried. Six checkpoints that could each fail somebody would turn thirty-one
+slides into six exams, and the first thing anybody would do is stop answering
+honestly. The tick appears against the **correct** option whether or not it was
+the one chosen: an icon that only shows up when somebody was right leaves the
+person who was wrong looking at four options and no answer.
+
+**A checkpoint question is spent.** Because the checkpoint shows the answer, it
+can never appear in that learner's graded check — otherwise the score measures
+who was shown the answer twenty minutes ago rather than who knew the material.
+The arithmetic is comfortable: a bank of a hundred, at most twelve spent across
+six checkpoints, ten dealt from the eighty-eight that remain. A question that
+was *dealt and not answered* counts as spent too: they read the prompt, and
+asking it again in the check gives them one question they have had twenty
+minutes to think about and nine they have not.
+
+**The pair is dealt once and written down.** Reloading gives back the same two,
+so nobody can refresh past a question they did not like until an easier pair
+arrives. That guarantee is a unique index rather than a branch in the code —
+two tabs can reach the same checkpoint at once.
+
+**A checkpoint that cannot be fetched is not a locked door.** The course is
+what somebody came for, and a network failure between two slides is not a
+reason to end their training.
+
+The report shows what the checkpoints found, under *Were they listening* — the
+only measure of attention **during** the course this product has. It is counts,
+with the proportion withheld below the same twenty-answer floor the question
+statistics use.
+
+---
+
 ## The knowledge check
 
 A bank of **100 questions**; each learner answers **ten of them**, dealt when
-the attempt starts.
+the attempt starts — minus anything a checkpoint has already given away.
 
 **No two attempts are dealt the same ten in the same order.** That is enforced
 by a unique index on a fingerprint of the ordered draw, not left to
