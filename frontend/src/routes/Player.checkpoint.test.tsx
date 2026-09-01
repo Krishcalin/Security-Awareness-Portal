@@ -233,3 +233,84 @@ describe("a checkpoint every five slides", () => {
     expect(screen.queryByText("Quick check")).not.toBeInTheDocument()
   })
 })
+
+describe("with auto-advance left ON, which is the default", () => {
+  /**
+   * THE DEFECT THIS COVERS, REPORTED FROM A REAL RUN: "I am at slide 8 and I
+   * am still not getting the Q&A."
+   *
+   * The forward gate lives in `step`. Auto-advance does not go through `step`
+   * — when a recording ends it calls `goTo` itself, from three separate
+   * callbacks — so slide five ended, the checkpoint was fetched, and the
+   * player moved to slide six before anybody could see it.
+   *
+   * Every test above turned auto-advance OFF as its first act, because
+   * otherwise the course walks past the button under test. That helper
+   * disabled the exact thing that was broken, so nine passing tests said
+   * nothing about the default path. These do not touch the setting.
+   */
+  async function play() {
+    renderPlayer()
+    await screen.findByText("Slide 1")
+  }
+
+  /** Let each recording end; auto-advance carries the course on by itself. */
+  async function playThrough(upTo: number) {
+    for (let at = 1; at < upTo; at++) {
+      await screen.findByText(`Slide ${at}`)
+      fireEvent.ended(document.querySelector("audio")!)
+    }
+    await screen.findByText(`Slide ${upTo}`)
+  }
+
+  it("stops at the checkpoint instead of walking past it", async () => {
+    await play()
+    await playThrough(5)
+    fireEvent.ended(document.querySelector("audio")!)
+
+    expect(await screen.findByText("Quick check")).toBeInTheDocument()
+    // Still on five. Before the fix this was slide six, and by slide eight the
+    // learner had been carried past two checkpoints without seeing either.
+    expect(screen.getByText("Slide 5")).toBeInTheDocument()
+    expect(screen.queryByText("Slide 6")).not.toBeInTheDocument()
+  })
+
+  it("does not reach slide eight without asking", async () => {
+    // The report as it arrived, turned into an assertion.
+    await play()
+    await playThrough(5)
+    fireEvent.ended(document.querySelector("audio")!)
+    await screen.findByText("Quick check")
+
+    for (let n = 0; n < 4; n++) {
+      fireEvent.ended(document.querySelector("audio")!)
+    }
+    expect(screen.getByText("Slide 5")).toBeInTheDocument()
+  })
+
+  it("still carries the course on between ordinary slides", async () => {
+    // The fix must not turn auto-advance off in general; it only has to hold
+    // at a checkpoint.
+    await play()
+    await playThrough(4)
+    expect(screen.getByText("Slide 4")).toBeInTheDocument()
+    expect(checkpoint).not.toHaveBeenCalled()
+  })
+
+  it("carries on again once the questions are answered", async () => {
+    await play()
+    await playThrough(5)
+    fireEvent.ended(document.querySelector("audio")!)
+    await screen.findByText("Quick check")
+
+    await userEvent.click(screen.getByRole("button", { name: /A fish/ }))
+    await userEvent.click(screen.getByRole("button", { name: /service desk/ }))
+
+    // Deliberately NOT automatic: the explanation is the teaching moment, and
+    // whisking somebody away from it a moment after they answer destroys the
+    // thing the checkpoint exists to do. The way on opens; they take it.
+    await waitFor(() => expect(nextSlide()).toBeEnabled())
+    await userEvent.click(nextSlide())
+    expect(await screen.findByText("Slide 6")).toBeInTheDocument()
+  })
+})

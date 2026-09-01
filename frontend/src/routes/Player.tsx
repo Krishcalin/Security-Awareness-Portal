@@ -156,6 +156,26 @@ export function Player() {
   // Read inside callbacks that outlive the render they were made in.
   const autoAdvanceNow = useRef(autoAdvance)
   autoAdvanceNow.current = autoAdvance
+
+  /* DOES THE COURSE HAVE TO STOP ON THIS SLIDE?
+   *
+   * THE BUG THIS FIXES. The forward gate lives in `step`, and auto-advance
+   * does not go through `step` — when a recording ends it calls `goTo` itself,
+   * from three places. Auto-advance is ON by default, so slide five finished,
+   * the checkpoint was fetched, and the player moved to slide six before
+   * anybody could see it. Reported from a real run: "I am at slide 8 and I
+   * have still not seen the questions."
+   *
+   * A ref rather than the state itself, because the three readers are inside
+   * callbacks handed to an <audio> element and a speech synthesiser, which
+   * close over the render that created them.
+   *
+   * `checkpoint` is still null at the instant a recording ends — the fetch is
+   * only triggered by that same event — so this asks whether the slide HAS a
+   * checkpoint, not whether one has arrived. Erring towards stopping: pausing
+   * a course that turns out to have nothing to ask costs one click, and not
+   * pausing loses the feature. */
+  const stopHereNow = useRef(false)
   const lastIndex = (detail?.lessons.length ?? 1) - 1
   const indexNow = useRef(index)
   indexNow.current = index
@@ -350,7 +370,7 @@ export function Player() {
         speaking.current = false
         setHeard((was) => ({ ...was, fraction: 1, seconds: was.total }))
         heardToTheEnd()
-        if (!autoAdvanceNow.current) return
+        if (!autoAdvanceNow.current || stopHereNow.current) return
         const next = indexNow.current + 1
         if (next <= lastIndex) goTo(next)
         else setReachedEnd(true)
@@ -409,6 +429,7 @@ export function Player() {
   const ordinal = lesson?.ordinal ?? 0
   const stop = detail ? checkpointAfter(ordinal, detail.lessons.length) : null
   const heardThis = heardSlides.has(ordinal)
+  stopHereNow.current = stop !== null && !(checkpoint?.complete ?? false)
   useEffect(() => {
     if (stop === null || !heardThis) { setCheckpoint(null); return }
     let cancelled = false
@@ -536,7 +557,8 @@ export function Player() {
             setSpokenAt(-1)
             setHeard((was) => ({ ...was, fraction: 1, seconds: was.total }))
             heardToTheEnd()
-            if (!autoAdvanceNow.current) return
+            // Not `step`, so the checkpoint gate has to be repeated here.
+            if (!autoAdvanceNow.current || stopHereNow.current) return
             if (index < lastIndex) goTo(index + 1)
             else setReachedEnd(true)
           }}
@@ -550,7 +572,7 @@ export function Player() {
               onWord: setSpokenAt,
               onEnd: () => {
                 heardToTheEnd()
-                if (!autoAdvanceNow.current) return
+                if (!autoAdvanceNow.current || stopHereNow.current) return
                 const next = indexNow.current + 1
                 if (next <= lastIndex) goTo(next)
                 else setReachedEnd(true)
