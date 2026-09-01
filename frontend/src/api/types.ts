@@ -194,8 +194,35 @@ export interface ReportSlide {
   reached: number
 }
 
+/** server/roster.py — who was supposed to take the course.
+ *
+ *  The report used to divide by `count(*) FROM learner`, and a learner row
+ *  exists only once somebody has SIGNED IN. So a person who ignored the
+ *  training was in neither the numerator nor the denominator. `null` on the
+ *  summary means no roster has been imported, which is a different state from
+ *  a roster naming nobody — and the screen says which. */
+export interface RosterStats {
+  expected: number
+  /** The figure the old report could not produce at all. Not the same as
+   *  `signed_in_not_started`: one needs an account or a nudge, the other needs
+   *  reminding to open it. */
+  never_signed_in: number
+  signed_in_not_started: number
+  started_not_passed: number
+  passed: number
+  /** People with results who are on no roster row — the other half of every
+   *  matching failure. A changed email address appears once here and once in
+   *  `never_signed_in_people`. */
+  off_roster: number
+  never_signed_in_people: {
+    email: string; display_name: string; department: string
+  }[]
+}
+
 export interface ReportPerson {
-  id: number
+  /** Null for somebody on the roster who has never signed in: there is no
+   *  learner row, because nothing has ever created one for them. */
+  id: number | null
   email: string
   display_name: string
   department: string
@@ -208,6 +235,10 @@ export interface ReportPerson {
   certificate: string | null
   issued_at: string | null
   passed_on_attempt: number | null
+  /** False for a roster entry that matched no learner. Present only when a
+   *  roster exists; without one every row is somebody who signed in. */
+  signed_in?: boolean
+  on_roster?: boolean
 }
 
 export interface Report {
@@ -218,6 +249,12 @@ export interface Report {
      *  has opened a cycle, where they are about all of time. */
     cycle: Cycle | null
     overdue: boolean
+    /** Null until somebody imports a roster. The screen must then say that
+     *  `people` counts sign-ins rather than the workforce. */
+    roster: RosterStats | null
+    /** Everybody who has ever signed in — NOT everybody who was supposed to
+     *  take the course. Kept beside the roster figures because "signed in and
+     *  never opened it" is a real state with its own remedy. */
     people: number
     never_opened: number
     opened: number
@@ -230,6 +267,11 @@ export interface Report {
   questions: ReportQuestion[]
   slides: ReportSlide[]
   departments: { department: string; people: number; reached_end: number; passed: number }[]
+  off_roster: {
+    learner_id: number; email: string; display_name: string
+    department: string; started_at: string | null
+    completed_at: string | null; certificate: string | null
+  }[]
   delivery: {
     issued: number
     emailed: number

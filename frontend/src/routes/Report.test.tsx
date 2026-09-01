@@ -22,6 +22,13 @@ const DATA = {
     cycle: null as null | { id: number; name: string; opens_at: string
                             due_at: string | null },
     overdue: false,
+    roster: null as null | {
+      expected: number; never_signed_in: number
+      signed_in_not_started: number; started_not_passed: number
+      passed: number; off_roster: number
+      never_signed_in_people: { email: string; display_name: string
+                                department: string }[]
+    },
     people: 29, never_opened: 4, opened: 25, stopped_partway: 4,
     reached_end: 21, passed: 21, passed_first_time: 13,
   },
@@ -45,6 +52,9 @@ const DATA = {
     { ordinal: 3, title: "Phishing Emails", stopped_here: 1, reached: 27 },
   ],
   departments: [],
+  off_roster: [] as { learner_id: number; email: string; display_name: string
+                      department: string; started_at: string | null
+                      completed_at: string | null; certificate: string | null }[],
   delivery: { issued: 21, emailed: 0, failed: 21, not_attempted: 0, failures: [] },
   thresholds: { min_answers: 20, not_discriminating: 0.95,
                 material_failed: 0.4, pass_mark: 0.7 },

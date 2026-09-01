@@ -656,10 +656,63 @@ that is what the app's own header uses.
 `/report/<module>` — for whoever has to act on this. Everything the schema has
 been carefully recording since the first commit is finally read here.
 
-**It exists to avoid producing one number.** "94% trained" fits on a slide,
-gets pasted into a board pack, and is read as evidence that people can spot a
-phish — when all it says is that they reached the last page. So the headline is
-six figures that are never combined:
+**It starts with who was supposed to take it**, because every other figure on
+the page is divided by something.
+
+For a long time that something was wrong. The denominator was
+`count(*) FROM learner`, and a learner row is created when somebody **signs
+in** — nowhere else. So "never opened it" actually meant "signed in, and never
+opened it", and a person who ignored the training entirely was in neither the
+numerator nor the denominator. They did not read as untrained. They did not
+read at all. Measured on a development database with four people expected and
+one who had signed in, the old report said *"1 person, 0 never opened it"* — a
+complete and clean-looking picture of a course nobody had taken.
+
+That gap fell hardest on the people this portal went out of its way to serve.
+The password sign-in exists for contractors, shift staff on shared terminals
+and site engineers with a payroll number and no mailbox — the population least
+likely to have signed in unprompted, and the one the figure could not see.
+
+So the course has a roster: the people expected to take it, imported from
+whatever the HR system exports.
+
+```bash
+docker compose exec app python -m server.roster \
+    --module security-awareness-essentials --csv people.csv --dry-run
+```
+
+Column names are matched in several spellings (`email`, `work email`, `upn`;
+`department`, `cost centre`; `employee number`, `payroll`), because an HR
+export is whatever the HR system emits. `--dry-run` parses and reports without
+writing. A file with no recognisable email column, or one bad address in it, is
+**refused entirely** rather than half-imported: a partly-loaded roster silently
+shrinks the denominator, which is the failure the roster exists to fix.
+
+Re-importing is safe and additive. `--replace` marks everybody absent from the
+file as a leaver — which is what a full export means and a disaster for a
+partial one, so it is never the default. A leaver is marked, never deleted:
+they were expected during a cycle they may have completed, and erasing that
+would rewrite what the report said at the time.
+
+**Matching is on the email address, which is the weak key, and the report says
+so by showing both of its failures.** Email is a display attribute in Entra —
+it changes on marriage, transfer or rebrand — but it is also the only thing an
+HR export is keyed on. So rather than pretend the match is sound, the screen
+reports roster entries that matched no learner *and* learners with results who
+are on no roster. Somebody whose address changed appears once in each, which is
+a puzzle an administrator can solve. A silent "not started" is not.
+
+**Not an Entra group**, or at least not only one: the population most likely to
+be missing is the population the directory does not hold, so reading the roster
+from Entra would systematically omit exactly the people it exists to find.
+
+**Without a roster the page says so, in words**, and names the command. It does
+not quietly carry on quoting a percentage over the people who turned up.
+
+**Then it avoids producing one number.** "94% trained" fits on a slide, gets
+pasted into a board pack, and is read as evidence that people can spot a phish
+— when all it says is that they reached the last page. So the headline is six
+figures that are never combined:
 
 | | |
 |---|---|
@@ -668,6 +721,11 @@ six figures that are never combined:
 | reached the end | saw every slide |
 | passed the check | could answer questions about them |
 | **passed first time** | the figure that carries the most evidence, and the one a single number always loses |
+
+These six count the people who have signed in. That is a real population with
+its own remedies — "signed in and never opened it" needs a reminder, not an
+account — and it is not the same as the roster above it. The screen labels
+which is which rather than merging them.
 
 **A rate from a handful of answers is not reported at all.** "100% correct"
 from three attempts is noise wearing the costume of a statistic, and it is
@@ -690,6 +748,11 @@ certificate that arrived.
 
 `Export the record` produces the CSV a regulator asks for, with completion and
 result in separate columns and no "trained" column at all.
+
+The list of people carries the roster distinction too. Somebody who never
+signed in reads **Never signed in**, not "Never opened it", and their result
+columns show an em dash rather than a `No` — they did not fail to complete the
+course; nothing about them was ever measured.
 
 ### Who can see it
 

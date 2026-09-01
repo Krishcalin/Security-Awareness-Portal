@@ -482,3 +482,70 @@ ALTER TABLE certificate ADD CONSTRAINT certificate_cycle_id_fkey
 ALTER TABLE enrolment DROP CONSTRAINT IF EXISTS enrolment_cycle_id_fkey;
 ALTER TABLE enrolment ADD CONSTRAINT enrolment_cycle_id_fkey
     FOREIGN KEY (cycle_id) REFERENCES training_cycle(id) ON DELETE RESTRICT;
+
+
+-- ── the roster: who was supposed to take this ──────────────────────────────
+--
+-- THE DENOMINATOR WAS THE PEOPLE WHO TURNED UP. `reporting.summary` counted
+-- `(SELECT count(*) FROM learner)`, and a learner row comes into existence
+-- when somebody SIGNS IN — nowhere else. So "never opened it" meant "signed in
+-- and never opened it", and somebody who ignored the training entirely was in
+-- neither the numerator nor the denominator. They did not read as untrained.
+-- They did not read at all.
+--
+-- This product exists because "94% of staff are trained" measures that people
+-- reached the last page. A percentage taken over the people who showed up is
+-- weaker than that again, and it is the figure that gets pasted into a board
+-- pack.
+--
+-- WHY THIS IS NOT AN ENTRA GROUP, or not only one. The population most likely
+-- to be missing is the population Entra does not hold: this product's password
+-- sign-in exists for "contractors, shift staff on shared OT terminals, and
+-- site engineers who have a payroll number and no mailbox" (see the password
+-- section above). A roster read from the directory would systematically omit
+-- exactly the people the roster exists to find. An HR export is the source
+-- that covers everybody, so CSV is the primary path rather than the fallback.
+--
+-- MATCHING IS ON EMAIL, AND THAT IS THE WEAK KEY, deliberately and with the
+-- weakness surfaced rather than hidden. The learner table says it plainly:
+-- email is a display attribute in Entra, and it changes on marriage, transfer
+-- or rebrand. A roster keyed on it will show a renamed person as never having
+-- signed in. The answer is not to pretend otherwise — an HR export is the only
+-- thing an administrator can actually produce, and it is keyed on email — but
+-- to make the reconciliation report BOTH sides: roster entries that matched no
+-- learner, and learners with results who are on no roster. A changed address
+-- appears once in each list, which is a puzzle an administrator can solve. A
+-- silent "not started" is not.
+CREATE TABLE IF NOT EXISTS roster_entry (
+    id           bigserial PRIMARY KEY,
+    module_id    bigint NOT NULL REFERENCES module(id) ON DELETE CASCADE,
+    -- Stored exactly as supplied so the administrator can recognise their own
+    -- file; matched case-insensitively, because an HR export and a directory
+    -- disagree about capitalisation far more often than about identity.
+    email        text NOT NULL,
+    display_name text NOT NULL DEFAULT '',
+    department   text NOT NULL DEFAULT '',
+    -- The payroll or employee number, when the export carries one. Not used for
+    -- matching today — `learner` holds no such column, and inventing one that
+    -- nothing populates would be a key in name only. It is stored because it is
+    -- the identifier a utility's HR system actually treats as stable, and
+    -- discarding it at import would mean asking for the file again later.
+    person_ref   text NOT NULL DEFAULT '',
+    source       text NOT NULL DEFAULT 'csv',
+    added_at     timestamptz NOT NULL DEFAULT now(),
+    -- A leaver. Not a delete: they were expected during a cycle they may have
+    -- completed, and erasing the expectation would rewrite what the report said
+    -- at the time. Rows with `removed_at` set are excluded from "expected" and
+    -- keep their history.
+    removed_at   timestamptz
+);
+
+-- One row per person per module. The unique index is on the LOWER-CASED
+-- address, so re-importing a file that spells it differently updates the row
+-- it already has instead of quietly creating a second expectation for the same
+-- person and inflating the denominator.
+CREATE UNIQUE INDEX IF NOT EXISTS roster_entry_module_email_idx
+    ON roster_entry (module_id, lower(email));
+
+CREATE INDEX IF NOT EXISTS roster_entry_expected_idx
+    ON roster_entry (module_id) WHERE removed_at IS NULL;

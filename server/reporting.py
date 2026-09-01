@@ -32,7 +32,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from server import cycles, db
+from server import cycles, db, roster
 
 #: Below this many answers, a correct rate is not reported. Small samples are
 #: where confident-looking nonsense comes from, and a report that says "100%"
@@ -91,12 +91,21 @@ def summary(module_id: int) -> Dict[str, Any]:
         """, (module_id, cycle_id))
 
     people = row["people"] or 0
+    # WHO WAS SUPPOSED TO TAKE IT, when somebody has said. None when nobody
+    # has, and the screen then states out loud that it is counting sign-ins —
+    # see server/roster.py for why that denominator was the wrong one.
+    expected = roster.stats(module_id, cycle_id)
     return {
+        "roster": expected,
         # Named, so nobody reads a figure off this screen without knowing
         # which period it is about.
         "cycle": cycle,
         "overdue": bool(cycle and cycle["due_at"]
                         and cycle["due_at"] < datetime.now(timezone.utc)),
+        # These two remain the sign-in population, unchanged and now
+        # explicitly labelled as such by the screen. They are not replaced by
+        # the roster figures: "signed in and never opened it" is a real state
+        # with its own remedy, and it is not the same as never having appeared.
         "people": people,
         "never_opened": people - row["opened"],
         "opened": row["opened"],
@@ -114,7 +123,44 @@ def people(module_id: int) -> List[Dict[str, Any]]:
 
     Somebody who passed last year and has not started this year shows as not
     started, which is the truth about this cycle and the only useful thing to
-    put in front of whoever has to chase them."""
+    put in front of whoever has to chase them.
+
+    AND, WHERE A ROSTER EXISTS, one row per person who never signed in at all.
+    This list is what somebody works down when they have to chase; it was built
+    from the `learner` table, so the people who ignored the training entirely
+    were the only ones not on it. `signed_in` is false for those rows and every
+    result column is null — not zero, because nothing was measured.
+    """
+    rows = _people_who_signed_in(module_id)
+    if not roster.present(module_id):
+        return rows
+
+    known = {r["email"].lower() for r in rows if r["email"]}
+    absent = [
+        {"id": None, "email": entry["email"],
+         "display_name": entry["roster_name"] or entry["email"],
+         "department": entry["department"],
+         "started_at": None, "completed_at": None, "furthest_ordinal": 0,
+         "attempts": 0, "latest_score": None, "out_of": None,
+         "certificate": None, "issued_at": None, "passed_on_attempt": None,
+         "signed_in": False, "on_roster": True}
+        for entry in roster.expected(module_id, cycles.current_id(module_id))
+        if not entry["signed_in"] and entry["email"].lower() not in known]
+
+    on_roster = {e["email"].lower() for e in roster.expected(module_id)}
+    for row in rows:
+        row["signed_in"] = True
+        # False here is the other half of a matching failure — somebody with
+        # results whose address is on no roster row. Shown, never filtered.
+        row["on_roster"] = (row["email"] or "").lower() in on_roster
+
+    return sorted(rows + absent,
+                  key=lambda r: ((r["department"] or "").lower(),
+                                 (r["display_name"] or "").lower(),
+                                 (r["email"] or "").lower()))
+
+
+def _people_who_signed_in(module_id: int) -> List[Dict[str, Any]]:
     return db.query(
         """
         SELECT l.id, l.email, l.display_name, l.department,

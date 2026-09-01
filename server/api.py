@@ -39,7 +39,7 @@ from pydantic import BaseModel, Field
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from server import (auth, certificate, content, cycles, db, entra, ingest,
-                    mailer, passwords, reporting)
+                    mailer, passwords, reporting, roster)
 from server.config import settings
 
 log = logging.getLogger(__name__)
@@ -804,6 +804,11 @@ def report(slug: str,
         "slides": reporting.slides(module["id"]),
         "departments": reporting.departments(module["id"]),
         "delivery": reporting.delivery(module["id"]),
+        # People with results who are on no roster row. The other half of every
+        # matching failure — a changed email address shows up once here and
+        # once in the roster's never-signed-in list, and somebody can put the
+        # two together. Empty when there is no roster to be off.
+        "off_roster": roster.off_roster(module["id"]),
         "thresholds": {
             "min_answers": reporting.MIN_ANSWERS,
             "not_discriminating": reporting.NOT_DISCRIMINATING,

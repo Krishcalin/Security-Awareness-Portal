@@ -92,13 +92,72 @@ export function Report() {
         </a>
       </div>
 
+      {/* ── who was supposed to take it ─────────────────────────────── */}
+      {/* THE DENOMINATOR WAS THE PEOPLE WHO TURNED UP. Every figure below used
+          to be divided by the number of people who had signed in, and a person
+          who ignored the training entirely had no row anywhere — so they did
+          not read as untrained, they did not read at all. This section is
+          first because it is the one that answers "who has not done it", and
+          because without it the numbers under it mean less than they look. */}
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
+          Who was supposed to take it
+        </h2>
+        {s.roster ? (
+          <>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <Figure label="Expected" value={s.roster.expected} />
+              <Figure label="Never signed in" value={s.roster.never_signed_in} />
+              <Figure label="Signed in, not started"
+                      value={s.roster.signed_in_not_started} />
+              <Figure label="Started, not passed"
+                      value={s.roster.started_not_passed} />
+              <Figure label="Passed" value={s.roster.passed} strong />
+            </div>
+            {s.roster.never_signed_in > 0 && (
+              <p className="mt-3 max-w-prose text-sm text-muted">
+                <strong className="text-text">
+                  {s.roster.never_signed_in} of {s.roster.expected}
+                </strong>{" "}
+                have never signed in. They have no record here at all, which is
+                why they were invisible to every other figure on this page.
+              </p>
+            )}
+            {s.roster.off_roster > 0 && (
+              <p className="mt-2 max-w-prose text-sm text-muted">
+                {s.roster.off_roster}{" "}
+                {s.roster.off_roster === 1
+                  ? "person has results and is"
+                  : "people have results and are"}{" "}
+                on no roster row. An email address that changed since the export
+                shows up twice — once here, once as never signed in — and the
+                two are the same person.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mt-3 max-w-prose text-sm text-muted">
+            No roster has been imported, so every figure on this page is over
+            the <strong className="text-text">{s.people}</strong>{" "}
+            {s.people === 1 ? "person" : "people"} who have signed in — not over
+            the people who were supposed to take the course. Somebody who has
+            never opened the portal is not counted anywhere below. Import one
+            with{" "}
+            <code className="rounded bg-line/60 px-1 py-0.5 text-xs">
+              python -m server.roster --module {data.module.slug} --csv hr.csv
+            </code>
+            .
+          </p>
+        )}
+      </section>
+
       {/* ── the headline, deliberately as six numbers ─────────────────── */}
       <section className="mt-8">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
           Where people are
         </h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Figure label="People" value={s.people} />
+          <Figure label="Signed in" value={s.people} />
           <Figure label="Never opened it" value={s.never_opened} />
           <Figure label="Stopped part way" value={s.stopped_partway} />
           <Figure label="Reached the end" value={s.reached_end} />
@@ -110,7 +169,8 @@ export function Report() {
           end means somebody saw every slide; passing means they could answer
           questions about them. <strong className="text-text">Passing first
           time</strong> is the one that carries the most evidence — a pass on
-          the third attempt is a different thing.
+          the third attempt is a different thing. These six count the people
+          who have signed in{s.roster ? ", which is not everybody expected" : ""}.
         </p>
       </section>
 
@@ -234,19 +294,37 @@ export function Report() {
               </thead>
               <tbody>
                 {people.map((person) => (
-                  <tr key={person.id} className="border-t border-line">
+                  <tr key={person.id ?? `roster:${person.email}`}
+                      className="border-t border-line">
                     <td className="p-3">
                       <div>{person.display_name || person.email}</div>
                       <div className="text-xs text-muted">{person.email}</div>
+                      {/* Only shown where a roster exists, because without one
+                          every row is somebody who signed in and the label
+                          would be noise on every line. */}
+                      {person.on_roster === false && (
+                        <div className="text-xs text-muted">
+                          not on the roster
+                        </div>
+                      )}
                     </td>
                     <td className="p-3 text-muted">{person.department || "—"}</td>
                     <td className="p-3 text-muted">
-                      {person.started_at
-                        ? `Slide ${person.furthest_ordinal}`
-                        : "Never opened it"}
+                      {person.signed_in === false ? (
+                        <span className="text-wrong">Never signed in</span>
+                      ) : person.started_at ? (
+                        `Slide ${person.furthest_ordinal}`
+                      ) : (
+                        "Never opened it"
+                      )}
                     </td>
                     <td className="p-3 text-muted">
-                      {person.completed_at ? "Yes" : "No"}
+                      {/* An em dash, not "No". "No" is a fact about somebody
+                          who was here; for a person with no account it would
+                          be a measurement of nothing. */}
+                      {person.signed_in === false
+                        ? "—"
+                        : person.completed_at ? "Yes" : "No"}
                     </td>
                     <td className="p-3 text-right tabular-nums">
                       {person.latest_score === null
@@ -275,6 +353,12 @@ export function Report() {
                               : ""}
                           </div>
                         </>
+                      ) : person.signed_in === false ? (
+                        /* Not "No". Somebody with no account did not fail to
+                           complete the course — nothing about them was
+                           measured, and a No in this column is an answer to a
+                           question nobody was able to ask. */
+                        <span className="text-muted">—</span>
                       ) : (
                         <span className="text-muted">No</span>
                       )}

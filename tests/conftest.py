@@ -65,6 +65,10 @@ def clean(app_client):
     from server import db
     db.execute("TRUNCATE response, attempt, enrolment, learner "
                "RESTART IDENTITY CASCADE")
+    # roster_entry hangs off module, not learner, so the cascade above does not
+    # reach it. A roster left behind changes the denominator of the next test's
+    # report, which is a failure that would look like a bug in the report.
+    db.execute("TRUNCATE roster_entry RESTART IDENTITY")
     # The client is shared for the whole session, so its cookie jar outlives
     # each test. A cookie the SERVER set in an earlier test is not replaced by
     # a later `cookies.set` of the same name — httpx keeps both — and the
